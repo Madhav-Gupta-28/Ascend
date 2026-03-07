@@ -39,6 +39,17 @@ const PREDICTION_MARKET_ABI = [
     "event RoundResolved(uint256 indexed roundId, uint256 endPrice, uint8 outcome)",
 ];
 
+const STAKING_VAULT_ABI = [
+    "function depositReward(uint256 agentId) external payable",
+    "function stakeOnAgent(uint256 agentId) external payable",
+    "function unstake(uint256 agentId, uint256 amount) external",
+    "function claimReward(uint256 agentId) external",
+    "function getUserStake(uint256 agentId, address user) external view returns (uint256)",
+    "function getAgentTVL(uint256 agentId) external view returns (uint256)",
+    "function getRewardPerToken(uint256 agentId) external view returns (uint256)",
+    "function calculatePendingReward(uint256 agentId, address user) external view returns (uint256)"
+];
+
 // ── Types ──
 
 export interface AgentData {
@@ -77,7 +88,7 @@ export interface Deployments {
     operatorId: string;
     hcs: { ascendRoundsTopicId: string };
     hts: { ascendTokenId: string };
-    contracts: { agentRegistry: string; predictionMarket: string };
+    contracts: { agentRegistry: string; predictionMarket: string; stakingVault: string };
     createdAt: string;
 }
 
@@ -88,12 +99,14 @@ export class ContractClient {
     private signer: ethers.Wallet;
     private registry: ethers.Contract;
     private market: ethers.Contract;
+    private vault: ethers.Contract;
 
-    constructor(rpcUrl: string, privateKey: string, registryAddr: string, marketAddr: string) {
+    constructor(rpcUrl: string, privateKey: string, registryAddr: string, marketAddr: string, vaultAddr: string) {
         this.provider = new ethers.JsonRpcProvider(rpcUrl);
         this.signer = new ethers.Wallet(privateKey, this.provider);
         this.registry = new ethers.Contract(registryAddr, AGENT_REGISTRY_ABI, this.signer);
         this.market = new ethers.Contract(marketAddr, PREDICTION_MARKET_ABI, this.signer);
+        this.vault = new ethers.Contract(vaultAddr, STAKING_VAULT_ABI, this.signer);
     }
 
     // ── Agent Registry ──
@@ -202,6 +215,37 @@ export class ContractClient {
         return Number(await this.market.getRoundCount());
     }
 
+    async getParticipantIds(roundId: number): Promise<number[]> {
+        const ids = await this.market.getParticipantIds(roundId);
+        return ids.map((id: bigint) => Number(id));
+    }
+
+    // ── Staking Vault ──
+
+    async stakeOnAgent(agentId: number, amountHbar: number): Promise<void> {
+        const tx: ContractTransactionResponse = await this.vault.stakeOnAgent(
+            agentId,
+            { value: ethers.parseEther(amountHbar.toString()), gasLimit: 200_000 }
+        );
+        await tx.wait();
+    }
+
+    async unstake(agentId: number, amountHbar: number): Promise<void> {
+        const tx: ContractTransactionResponse = await this.vault.unstake(
+            agentId, ethers.parseEther(amountHbar.toString()),
+            { gasLimit: 300_000 }
+        );
+        await tx.wait();
+    }
+
+    async depositReward(agentId: number, rewardHbarStr: string): Promise<void> {
+        const tx: ContractTransactionResponse = await this.vault.depositReward(
+            agentId,
+            { value: ethers.parseEther(rewardHbarStr), gasLimit: 200_000 }
+        );
+        await tx.wait();
+    }
+
     getSignerAddress(): string {
         return this.signer.address;
     }
@@ -235,10 +279,15 @@ export function createContractClient(): ContractClient {
     const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
     if (!privateKey) throw new Error("DEPLOYER_PRIVATE_KEY not set");
 
+    if (!deployments.contracts.stakingVault) {
+        throw new Error("stakingVault address missing from deployments.json");
+    }
+
     return new ContractClient(
         rpcUrl,
         privateKey,
         deployments.contracts.agentRegistry,
-        deployments.contracts.predictionMarket
+        deployments.contracts.predictionMarket,
+        deployments.contracts.stakingVault
     );
 }

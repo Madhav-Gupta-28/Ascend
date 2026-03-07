@@ -68,7 +68,8 @@ export abstract class BaseAgent {
             rpcUrl,
             config.privateKey,
             contracts.agentRegistry,
-            contracts.predictionMarket
+            contracts.predictionMarket,
+            contracts.stakingVault
         );
 
         // HCS publisher (requires operator key for topic write access currently, 

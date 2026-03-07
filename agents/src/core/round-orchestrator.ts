@@ -229,6 +229,31 @@ export class RoundOrchestrator {
             scores
         );
 
+        // ── STEP 11: Reward Distribution (Operator routing 20% cut) ──
+        console.log("\n💰 Step 11: Distributing staking rewards...");
+        const correctAgents = predictions.filter(p => (p.direction === 0 ? "UP" : "DOWN") === outcome);
+        const incorrectAgents = predictions.filter(p => (p.direction === 0 ? "UP" : "DOWN") !== outcome);
+
+        if (correctAgents.length > 0 && incorrectAgents.length > 0 && config.entryFeeHbar > 0) {
+            // Total forfeited HBAR from incorrect agents
+            const totalForfeited = incorrectAgents.length * config.entryFeeHbar;
+            // Split equally among correct agents
+            const profitPerWinner = totalForfeited / correctAgents.length;
+            // Staking Vault cut: 20% of the profit
+            const stakerCutPerWinner = profitPerWinner * 0.20;
+
+            for (const winner of correctAgents) {
+                try {
+                    await this.contracts.depositReward(winner.agentId, stakerCutPerWinner.toString());
+                    console.log(`   [${winner.agentName}] Routed ${stakerCutPerWinner.toFixed(4)} HBAR to Staking Vault`);
+                } catch (err: any) {
+                    console.error(`   [${winner.agentName}] ❌ Failed to route reward: ${err.message}`);
+                }
+            }
+        } else {
+            console.log("   No rewards to route (either no winners, no losers, or free round).");
+        }
+
         // ── DONE ──
         console.log("\n══════════════════════════════════════");
         console.log(`  ROUND #${roundId} COMPLETE — Outcome: ${outcome}`);
