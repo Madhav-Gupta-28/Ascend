@@ -1,6 +1,8 @@
 import * as dotenv from "dotenv";
 import { AgentSentinel } from "../src/core/AgentSentinel.js";
 import { AgentPulse } from "../src/core/AgentPulse.js";
+import { AgentMeridian } from "../src/core/AgentMeridian.js";
+import { AgentOracle } from "../src/core/AgentOracle.js";
 
 dotenv.config();
 
@@ -16,21 +18,29 @@ async function main() {
 
     const sentinel = new AgentSentinel(privateKey);
     const pulse = new AgentPulse(privateKey);
+    const meridian = new AgentMeridian(privateKey);
+    const oracle = new AgentOracle(privateKey);
 
     console.log("-----------------------------------------");
     console.log(`🤖 Agent 1: ${sentinel["config"].name}`);
     console.log(`🤖 Agent 2: ${pulse["config"].name}`);
+    console.log(`🤖 Agent 3: ${meridian["config"].name}`);
+    console.log(`🤖 Agent 4: ${oracle["config"].name}`);
     console.log("-----------------------------------------");
 
     // Start their independent execution loops
     sentinel.start();
     pulse.start();
+    meridian.start();
+    oracle.start();
 
     // Handle graceful shutdown
     process.on("SIGINT", () => {
         console.log("\nGracefully shutting down agents...");
         sentinel.stop();
         pulse.stop();
+        meridian.stop();
+        oracle.stop();
         process.exit(0);
     });
 }

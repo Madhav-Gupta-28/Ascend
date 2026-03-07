@@ -21,3 +21,5 @@ export { BaseAgent } from "./BaseAgent.js";
 export type { AgentConfig, AgentState } from "./BaseAgent.js";
 export { AgentSentinel } from "./AgentSentinel.js";
 export { AgentPulse } from "./AgentPulse.js";
+export { AgentMeridian } from "./AgentMeridian.js";
+export { AgentOracle } from "./AgentOracle.js";
