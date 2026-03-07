@@ -2,12 +2,17 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./AgentRegistry.sol";
 
-/// @title PredictionMarket — Commit-reveal prediction rounds with integrated staking
-/// @notice Handles round lifecycle, commit-reveal protocol, scoring, and HBAR staking
-contract PredictionMarket is Ownable, ReentrancyGuard {
+/// @title PredictionMarket — Commit-reveal prediction rounds
+/// @author Ascend Protocol
+/// @notice Handles round lifecycle and commit-reveal protocol
+/// @dev KEY DESIGN: No loops that scale with participant count.
+///      resolveRound only sets the outcome. Score updates happen
+///      via individual claimResult() calls (1 tx per agent).
+contract PredictionMarket is Ownable {
+    // ── Enums ──
+
     enum Direction {
         UP,
         DOWN
@@ -19,15 +24,21 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
         Cancelled
     }
 
+    // ── Structs ──
+
     struct Round {
-        uint256 startPrice; // Price at round start (8 decimals, × 10^8)
-        uint256 endPrice; // Price at round end (set during resolution)
-        uint64 commitDeadline; // Timestamp: no commits after this
-        uint64 revealDeadline; // Timestamp: no reveals after this
-        uint64 resolveAfter; // Timestamp: can resolve after this
-        uint256 entryFee; // HBAR entry fee per agent
+        uint256 startPrice; // HBAR/USD × 10^8
+        uint256 endPrice; // Set at resolution
+        uint64 commitDeadline;
+        uint64 revealDeadline;
+        uint64 resolveAfter;
+        uint256 entryFee; // HBAR per agent
+        uint256 rewardPool; // Accumulated entry fees
         RoundStatus status;
-        uint256[] participantIds; // Agent IDs that committed
+        Direction outcome; // Set at resolution
+        uint8 participantCount; // Bounded by MAX_AGENTS (no array needed)
+        uint8 revealedCount; // How many revealed
+        uint8 claimedCount; // How many claimed results
     }
 
     struct Commitment {
@@ -36,25 +47,26 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
         uint256 confidence;
         bool committed;
         bool revealed;
+        bool scored; // Whether score was claimed
     }
 
-    struct Stake {
-        uint256 amount;
-    }
+    // ── State ──
 
     AgentRegistry public registry;
     uint256 public nextRoundId = 1;
 
     mapping(uint256 => Round) public rounds;
-    mapping(uint256 => mapping(uint256 => Commitment)) public commitments; // roundId => agentId => commitment
-    mapping(uint256 => mapping(address => Stake)) public stakes; // agentId => user => stake
-    mapping(uint256 => uint256) public totalAgentStakes; // agentId => total staked
+    mapping(uint256 => mapping(uint256 => Commitment)) public commitments; // roundId => agentId
+
+    // ── Events ──
 
     event RoundCreated(
         uint256 indexed roundId,
         uint256 startPrice,
         uint64 commitDeadline,
-        uint64 revealDeadline
+        uint64 revealDeadline,
+        uint64 resolveAfter,
+        uint256 entryFee
     );
     event PredictionCommitted(
         uint256 indexed roundId,
@@ -72,25 +84,31 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
         uint256 endPrice,
         Direction outcome
     );
-    event Staked(uint256 indexed agentId, address indexed user, uint256 amount);
-    event Unstaked(
+    event ScoreClaimed(
+        uint256 indexed roundId,
         uint256 indexed agentId,
-        address indexed user,
-        uint256 amount
+        bool correct,
+        int256 credScoreDelta
     );
+    event RoundCancelled(uint256 indexed roundId);
+
+    // ── Constructor ──
 
     constructor(address _registry) Ownable(msg.sender) {
+        require(_registry != address(0), "Invalid registry");
         registry = AgentRegistry(_registry);
     }
 
-    // ── Round Management ──
+    // ══════════════════════════════════════════
+    // ROUND MANAGEMENT
+    // ══════════════════════════════════════════
 
-    /// @notice Create a new prediction round (operator only)
-    /// @param commitDuration Seconds agents have to commit
-    /// @param revealDuration Seconds agents have to reveal after commit phase
-    /// @param roundDuration Seconds from round start to resolution eligibility
-    /// @param startPrice Starting HBAR/USD price (8 decimal precision)
-    /// @param entryFee HBAR fee per agent to participate
+    /// @notice Create a new prediction round
+    /// @param commitDuration Seconds for commit phase
+    /// @param revealDuration Seconds for reveal phase (after commit ends)
+    /// @param roundDuration Total seconds before resolution allowed
+    /// @param startPrice HBAR/USD price × 10^8
+    /// @param entryFee HBAR fee per agent (can be 0)
     function createRound(
         uint64 commitDuration,
         uint64 revealDuration,
@@ -102,33 +120,42 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
             commitDuration > 0 && revealDuration > 0 && roundDuration > 0,
             "Invalid durations"
         );
+        require(
+            roundDuration >= commitDuration + revealDuration,
+            "Round too short"
+        );
         require(startPrice > 0, "Invalid start price");
 
         uint256 roundId = nextRoundId++;
         uint64 now_ = uint64(block.timestamp);
 
-        rounds[roundId].startPrice = startPrice;
-        rounds[roundId].commitDeadline = now_ + commitDuration;
-        rounds[roundId].revealDeadline = now_ + commitDuration + revealDuration;
-        rounds[roundId].resolveAfter = now_ + roundDuration;
-        rounds[roundId].entryFee = entryFee;
-        rounds[roundId].status = RoundStatus.Committing;
+        Round storage round = rounds[roundId];
+        round.startPrice = startPrice;
+        round.commitDeadline = now_ + commitDuration;
+        round.revealDeadline = now_ + commitDuration + revealDuration;
+        round.resolveAfter = now_ + roundDuration;
+        round.entryFee = entryFee;
+        round.status = RoundStatus.Committing;
 
         emit RoundCreated(
             roundId,
             startPrice,
-            rounds[roundId].commitDeadline,
-            rounds[roundId].revealDeadline
+            round.commitDeadline,
+            round.revealDeadline,
+            round.resolveAfter,
+            entryFee
         );
         return roundId;
     }
 
-    // ── Commit-Reveal Protocol ──
+    // ══════════════════════════════════════════
+    // COMMIT PHASE — O(1) per agent
+    // ══════════════════════════════════════════
 
-    /// @notice Submit a hashed prediction (commit phase)
+    /// @notice Submit a hashed prediction
     /// @param roundId The round to predict in
     /// @param agentId The agent making the prediction
-    /// @param commitHash keccak256(abi.encodePacked(direction, confidence, salt))
+    /// @param commitHash keccak256(abi.encodePacked(uint8(direction), confidence, salt))
     function commitPrediction(
         uint256 roundId,
         uint256 agentId,
@@ -141,21 +168,26 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
             "Commit deadline passed"
         );
         require(msg.value >= round.entryFee, "Insufficient entry fee");
+        require(commitHash != bytes32(0), "Empty commit hash");
 
         AgentRegistry.Agent memory agent = registry.getAgent(agentId);
         require(agent.owner == msg.sender, "Not agent owner");
         require(agent.active, "Agent not active");
 
-        Commitment storage commitment = commitments[roundId][agentId];
-        require(!commitment.committed, "Already committed");
+        Commitment storage c = commitments[roundId][agentId];
+        require(!c.committed, "Already committed");
 
-        commitment.commitHash = commitHash;
-        commitment.committed = true;
-
-        round.participantIds.push(agentId);
+        c.commitHash = commitHash;
+        c.committed = true;
+        round.participantCount++;
+        round.rewardPool += msg.value;
 
         emit PredictionCommitted(roundId, agentId, commitHash);
     }
+
+    // ══════════════════════════════════════════
+    // REVEAL PHASE — O(1) per agent
+    // ══════════════════════════════════════════
 
     /// @notice Reveal a previously committed prediction
     /// @param roundId The round
@@ -171,49 +203,53 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
         bytes32 salt
     ) external {
         Round storage round = rounds[roundId];
-        require(
-            round.status == RoundStatus.Committing ||
-                round.status == RoundStatus.Revealing,
-            "Not in reveal phase"
-        );
-        require(
-            block.timestamp > round.commitDeadline,
-            "Commit phase still active"
-        );
+
+        // Auto-transition from Committing to Revealing
+        if (
+            round.status == RoundStatus.Committing &&
+            block.timestamp > round.commitDeadline
+        ) {
+            round.status = RoundStatus.Revealing;
+        }
+
+        require(round.status == RoundStatus.Revealing, "Not in reveal phase");
         require(
             block.timestamp <= round.revealDeadline,
             "Reveal deadline passed"
         );
 
-        // Update status to Revealing if still Committing
-        if (round.status == RoundStatus.Committing) {
-            round.status = RoundStatus.Revealing;
-        }
-
         AgentRegistry.Agent memory agent = registry.getAgent(agentId);
         require(agent.owner == msg.sender, "Not agent owner");
 
-        Commitment storage commitment = commitments[roundId][agentId];
-        require(commitment.committed, "Not committed");
-        require(!commitment.revealed, "Already revealed");
+        Commitment storage c = commitments[roundId][agentId];
+        require(c.committed, "Not committed");
+        require(!c.revealed, "Already revealed");
         require(confidence <= 100, "Confidence out of range");
 
-        // Verify hash
+        // Verify hash integrity
         bytes32 expectedHash = keccak256(
             abi.encodePacked(uint8(direction), confidence, salt)
         );
-        require(expectedHash == commitment.commitHash, "Hash mismatch");
+        require(expectedHash == c.commitHash, "Hash mismatch");
 
-        commitment.direction = direction;
-        commitment.confidence = confidence;
-        commitment.revealed = true;
+        c.direction = direction;
+        c.confidence = confidence;
+        c.revealed = true;
+        round.revealedCount++;
 
         emit PredictionRevealed(roundId, agentId, direction, confidence);
     }
 
-    /// @notice Resolve a round with the actual end price (operator only)
+    // ══════════════════════════════════════════
+    // RESOLUTION — O(1), no loops
+    // ══════════════════════════════════════════
+
+    /// @notice Resolve a round with the actual end price
+    /// @dev Only sets the outcome. Score updates happen via claimResult().
+    ///      This is the key optimization: resolveRound is O(1) regardless
+    ///      of participant count. No loops, no cross-contract calls.
     /// @param roundId The round to resolve
-    /// @param endPrice The actual HBAR/USD price at round end (8 decimal precision)
+    /// @param endPrice The actual HBAR/USD price × 10^8
     function resolveRound(
         uint256 roundId,
         uint256 endPrice
@@ -228,77 +264,54 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
         require(endPrice > 0, "Invalid end price");
 
         round.endPrice = endPrice;
-        round.status = RoundStatus.Resolved;
-
-        Direction outcome = endPrice >= round.startPrice
+        round.outcome = endPrice >= round.startPrice
             ? Direction.UP
             : Direction.DOWN;
+        round.status = RoundStatus.Resolved;
 
-        // Update scores for all revealed agents
-        for (uint256 i = 0; i < round.participantIds.length; i++) {
-            uint256 agentId = round.participantIds[i];
-            Commitment storage commitment = commitments[roundId][agentId];
-
-            if (commitment.revealed) {
-                bool correct = (commitment.direction == outcome);
-                registry.updateScore(agentId, correct, commitment.confidence);
-            }
-        }
-
-        emit RoundResolved(roundId, endPrice, outcome);
+        emit RoundResolved(roundId, endPrice, round.outcome);
     }
 
-    /// @notice Cancel a round (operator only, emergency)
+    /// @notice Claim score update for a specific agent in a resolved round
+    /// @dev Called once per agent per round — O(1). Replaces the old loop.
+    ///      The orchestrator calls this for each agent after resolution.
+    /// @param roundId The resolved round
+    /// @param agentId The agent to score
+    function claimResult(uint256 roundId, uint256 agentId) external {
+        Round storage round = rounds[roundId];
+        require(round.status == RoundStatus.Resolved, "Round not resolved");
+
+        Commitment storage c = commitments[roundId][agentId];
+        require(c.revealed, "Not revealed");
+        require(!c.scored, "Already scored");
+
+        c.scored = true;
+        round.claimedCount++;
+
+        bool correct = (c.direction == round.outcome);
+        registry.updateScore(agentId, correct, c.confidence);
+
+        int256 delta = correct ? int256(c.confidence) : -int256(c.confidence);
+        emit ScoreClaimed(roundId, agentId, correct, delta);
+    }
+
+    // ══════════════════════════════════════════
+    // CANCELLATION
+    // ══════════════════════════════════════════
+
+    /// @notice Cancel a round (operator emergency)
     function cancelRound(uint256 roundId) external onlyOwner {
-        require(
-            rounds[roundId].status != RoundStatus.Resolved,
-            "Already resolved"
-        );
-        require(
-            rounds[roundId].status != RoundStatus.Cancelled,
-            "Already cancelled"
-        );
-        rounds[roundId].status = RoundStatus.Cancelled;
+        Round storage round = rounds[roundId];
+        require(round.status != RoundStatus.Resolved, "Already resolved");
+        require(round.status != RoundStatus.Cancelled, "Already cancelled");
+        round.status = RoundStatus.Cancelled;
+
+        emit RoundCancelled(roundId);
     }
 
-    // ── Staking ──
-
-    /// @notice Stake HBAR on an agent
-    /// @param agentId The agent to stake on
-    function stakeOnAgent(uint256 agentId) external payable nonReentrant {
-        require(msg.value > 0, "Must stake > 0");
-        require(registry.isAgentActive(agentId), "Agent not active");
-
-        stakes[agentId][msg.sender].amount += msg.value;
-        totalAgentStakes[agentId] += msg.value;
-
-        registry.updateTotalStaked(agentId, int256(msg.value));
-
-        emit Staked(agentId, msg.sender, msg.value);
-    }
-
-    /// @notice Unstake HBAR from an agent
-    /// @param agentId The agent to unstake from
-    /// @param amount Amount of HBAR to withdraw
-    function unstake(uint256 agentId, uint256 amount) external nonReentrant {
-        require(amount > 0, "Must unstake > 0");
-        require(
-            stakes[agentId][msg.sender].amount >= amount,
-            "Insufficient stake"
-        );
-
-        stakes[agentId][msg.sender].amount -= amount;
-        totalAgentStakes[agentId] -= amount;
-
-        registry.updateTotalStaked(agentId, -int256(amount));
-
-        (bool sent, ) = payable(msg.sender).call{value: amount}("");
-        require(sent, "HBAR transfer failed");
-
-        emit Unstaked(agentId, msg.sender, amount);
-    }
-
-    // ── View Functions ──
+    // ══════════════════════════════════════════
+    // VIEW FUNCTIONS (free via eth_call)
+    // ══════════════════════════════════════════
 
     function getRound(
         uint256 roundId
@@ -313,19 +326,23 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
             uint64 resolveAfter,
             uint256 entryFee,
             RoundStatus status,
-            uint256 participantCount
+            Direction outcome,
+            uint8 participantCount,
+            uint8 revealedCount
         )
     {
-        Round storage round = rounds[roundId];
+        Round storage r = rounds[roundId];
         return (
-            round.startPrice,
-            round.endPrice,
-            round.commitDeadline,
-            round.revealDeadline,
-            round.resolveAfter,
-            round.entryFee,
-            round.status,
-            round.participantIds.length
+            r.startPrice,
+            r.endPrice,
+            r.commitDeadline,
+            r.revealDeadline,
+            r.resolveAfter,
+            r.entryFee,
+            r.status,
+            r.outcome,
+            r.participantCount,
+            r.revealedCount
         );
     }
 
@@ -338,28 +355,27 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
         returns (
             bool committed,
             bool revealed,
+            bool scored,
             Direction direction,
             uint256 confidence
         )
     {
         Commitment storage c = commitments[roundId][agentId];
-        return (c.committed, c.revealed, c.direction, c.confidence);
-    }
-
-    function getParticipantIds(
-        uint256 roundId
-    ) external view returns (uint256[] memory) {
-        return rounds[roundId].participantIds;
-    }
-
-    function getUserStake(
-        uint256 agentId,
-        address user
-    ) external view returns (uint256) {
-        return stakes[agentId][user].amount;
+        return (c.committed, c.revealed, c.scored, c.direction, c.confidence);
     }
 
     function getRoundCount() external view returns (uint256) {
         return nextRoundId - 1;
+    }
+
+    function isRoundResolved(uint256 roundId) external view returns (bool) {
+        return rounds[roundId].status == RoundStatus.Resolved;
+    }
+
+    function getRoundOutcome(
+        uint256 roundId
+    ) external view returns (Direction) {
+        require(rounds[roundId].status == RoundStatus.Resolved, "Not resolved");
+        return rounds[roundId].outcome;
     }
 }

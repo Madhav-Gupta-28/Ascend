@@ -9,13 +9,15 @@
         "setup:all": "npm run setup && npm run deploy"
     },
     "dependencies": {
+        "@ai-sdk/openai": "^3.0.41",
         "@hashgraph/sdk": "^2.55.0",
+        "ai": "^6.0.116",
         "dotenv": "^16.4.0",
         "ethers": "^6.11.0"
     },
     "devDependencies": {
+        "@types/node": "^20.11.0",
         "tsx": "^4.7.0",
-        "typescript": "^5.4.0",
-        "@types/node": "^20.11.0"
+        "typescript": "^5.4.0"
     }
 }

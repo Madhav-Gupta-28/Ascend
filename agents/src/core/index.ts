@@ -16,3 +16,8 @@ export type { DecodedHCSMessage } from "./mirror-node-client.js";
 
 export { RoundOrchestrator } from "./round-orchestrator.js";
 export type { AgentPrediction, RoundConfig, AgentProfile } from "./round-orchestrator.js";
+
+export { BaseAgent } from "./BaseAgent.js";
+export type { AgentConfig, AgentState } from "./BaseAgent.js";
+export { AgentSentinel } from "./AgentSentinel.js";
+export { AgentPulse } from "./AgentPulse.js";
