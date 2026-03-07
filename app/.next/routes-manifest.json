@@ -58,6 +58,18 @@
       "namedRegex": "^/_not\\-found(?:/)?$"
     },
     {
+      "page": "/api/discourse/ask",
+      "regex": "^/api/discourse/ask(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/discourse/ask(?:/)?$"
+    },
+    {
+      "page": "/api/discourse/messages",
+      "regex": "^/api/discourse/messages(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/discourse/messages(?:/)?$"
+    },
+    {
       "page": "/discourse",
       "regex": "^/discourse(?:/)?$",
       "routeKeys": {},

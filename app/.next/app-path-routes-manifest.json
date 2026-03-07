@@ -2,6 +2,8 @@
   "/_global-error/page": "/_global-error",
   "/_not-found/page": "/_not-found",
   "/agent/[id]/page": "/agent/[id]",
+  "/api/discourse/ask/route": "/api/discourse/ask",
+  "/api/discourse/messages/route": "/api/discourse/messages",
   "/discourse/page": "/discourse",
   "/page": "/",
   "/round/[id]/page": "/round/[id]",

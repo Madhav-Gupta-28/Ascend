@@ -2,6 +2,8 @@
   "/_global-error/page": "app/_global-error/page.js",
   "/_not-found/page": "app/_not-found/page.js",
   "/agent/[id]/page": "app/agent/[id]/page.js",
+  "/api/discourse/ask/route": "app/api/discourse/ask/route.js",
+  "/api/discourse/messages/route": "app/api/discourse/messages/route.js",
   "/discourse/page": "app/discourse/page.js",
   "/page": "app/page.js",
   "/round/[id]/page": "app/round/[id]/page.js",

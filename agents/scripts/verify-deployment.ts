@@ -22,7 +22,7 @@ interface Deployments {
     operatorId: string;
     hcs: { ascendRoundsTopicId: string };
     hts: { ascendTokenId: string };
-    contracts: { agentRegistry: string; predictionMarket: string };
+    contracts: { agentRegistry: string; predictionMarket: string; stakingVault: string };
     createdAt: string;
 }
 

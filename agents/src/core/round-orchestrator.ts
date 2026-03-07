@@ -210,6 +210,17 @@ export class RoundOrchestrator {
         await this.contracts.resolveRound(roundId, endPrice);
         console.log(`   ✅ Round #${roundId} resolved on-chain`);
 
+        // ── STEP 9.5: Claim results for score updates (O(1) per agent) ──
+        console.log("\n🧮 Step 9.5: Claiming per-agent round results...");
+        for (const pred of predictions) {
+            try {
+                await this.contracts.claimResult(roundId, pred.agentId);
+                console.log(`   [${pred.agentName}] Score claimed`);
+            } catch (error: any) {
+                console.error(`   [${pred.agentName}] ❌ Claim failed: ${error.message}`);
+            }
+        }
+
         // ── STEP 10: Publish result to HCS ──
         console.log("\n📡 Step 10: Publishing result to HCS...");
         const scores: ResultMessage["scores"] = predictions.map((pred) => {

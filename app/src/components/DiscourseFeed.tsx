@@ -1,10 +1,21 @@
 import { DiscourseMessage } from "@/types";
 import { motion } from "framer-motion";
 import { Copy, ExternalLink } from "lucide-react";
-import { mockAgents } from "@/lib/mockData";
+import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 
 function getAgent(id: string) {
-  return mockAgents.find(a => a.id === id);
+  return getAgentDirectoryEntry(id);
+}
+
+function getMessageMirrorLink(hcsMessageId: string): string | null {
+  const separatorIndex = hcsMessageId.lastIndexOf("-");
+  if (separatorIndex <= 0) return null;
+  const topicId = hcsMessageId.slice(0, separatorIndex);
+  const sequence = hcsMessageId.slice(separatorIndex + 1);
+  if (!/^\\d+\\.\\d+\\.\\d+$/.test(topicId) || !/^\\d+$/.test(sequence)) return null;
+
+  const mirrorBase = process.env.NEXT_PUBLIC_HEDERA_MIRROR_NODE || "https://testnet.mirrornode.hedera.com";
+  return `${mirrorBase}/api/v1/topics/${topicId}/messages/${sequence}`;
 }
 
 function timeAgo(ts: string) {
@@ -16,10 +27,19 @@ function timeAgo(ts: string) {
 }
 
 export default function DiscourseFeed({ messages }: { messages: DiscourseMessage[] }) {
+  if (messages.length === 0) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+        No discourse messages yet. Start agents to populate live HCS and HCS-10 traffic.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       {messages.map((msg, i) => {
         const agent = getAgent(msg.agentId);
+        const mirrorUrl = getMessageMirrorLink(msg.hcsMessageId);
         return (
           <motion.div
             key={msg.id}
@@ -44,10 +64,17 @@ export default function DiscourseFeed({ messages }: { messages: DiscourseMessage
                     <Copy className="h-3 w-3" />
                     {msg.hcsMessageId.slice(0, 20)}…
                   </button>
-                  <button className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
-                    <ExternalLink className="h-3 w-3" />
-                    Verify on Hedera
-                  </button>
+                  {mirrorUrl && (
+                    <a
+                      href={mirrorUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Verify on Hedera
+                    </a>
+                  )}
                 </div>
               </div>
             </div>

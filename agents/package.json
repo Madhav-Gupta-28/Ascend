@@ -8,7 +8,9 @@
         "deploy": "cd ../contracts && forge script script/DeployAscend.s.sol --rpc-url $HEDERA_JSON_RPC --broadcast --legacy",
         "setup:all": "npm run setup && npm run deploy",
         "check": "npx tsc --noEmit",
-        "test:hcs10": "npx tsx scripts/test-hcs10-simulation.ts"
+        "test:hcs10": "npx tsx scripts/test-hcs10-simulation.ts",
+        "run:orchestrator": "npx tsx scripts/run-orchestrator.ts",
+        "test:e2e:testnet": "npx tsx scripts/testnet-e2e-round.ts"
     },
     "dependencies": {
         "@ai-sdk/openai": "^3.0.41",

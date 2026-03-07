@@ -59,3 +59,6 @@ export {
     buildConnectionAcceptedTxMemo,
     parseOperatorId,
 } from "./hcs10-memo.js";
+
+export { HTSClient, createHTSClient } from "./hts-client.js";
+export type { HtsTokenInfo, RewardRecipient } from "./hts-client.js";

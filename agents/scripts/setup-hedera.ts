@@ -5,7 +5,7 @@
  * 1. HCS topic "ascend-rounds" (prediction reasoning, results, discourse)
  * 2. HCS topic "hcs10-registry" (agent discovery + handshake bootstrap)
  * 3. HTS "ASCEND" fungible token (standalone, not contract-integrated)
- * 3. Saves all resource IDs to deployments.json
+ * 4. Saves all resource IDs to deployments.json
  * 
  * Run: npx tsx scripts/setup-hedera.ts
  */
@@ -179,6 +179,7 @@ interface Deployments {
     contracts: {
         agentRegistry: string;
         predictionMarket: string;
+        stakingVault: string;
     };
     createdAt: string;
 }
@@ -205,6 +206,7 @@ function saveDeployments(topicId: string, registryTopicId: string, tokenId: stri
         contracts: {
             agentRegistry: existing.contracts?.agentRegistry || "NOT_DEPLOYED",
             predictionMarket: existing.contracts?.predictionMarket || "NOT_DEPLOYED",
+            stakingVault: existing.contracts?.stakingVault || "NOT_DEPLOYED",
         },
         createdAt: new Date().toISOString(),
     };
@@ -233,6 +235,7 @@ DEPLOYER_PRIVATE_KEY=0x...
 # Contract Addresses (populated after forge deploy)
 AGENT_REGISTRY_ADDRESS=0x...
 PREDICTION_MARKET_ADDRESS=0x...
+STAKING_VAULT_ADDRESS=0x...
 
 # HCS Topics (populated after setup-hedera.ts)
 ASCEND_ROUNDS_TOPIC_ID=0.0.XXXXX
@@ -266,8 +269,32 @@ ORACLE_HCS10_PRIVATE_KEY=302e020100...
 ORACLE_HCS10_INBOUND_TOPIC_ID=0.0.XXXXX
 ORACLE_HCS10_OUTBOUND_TOPIC_ID=0.0.XXXXX
 
+# Optional: Web relay identity and manual routing for discourse question.ask
+WEB_HCS10_OPERATOR_ID=0.0.XXXXX@0.0.XXXXX
+WEB_HCS10_INBOUND_TOPIC_ID=0.0.XXXXX
+HCS10_CONNECTION_TOPICS_JSON={\"1\":\"0.0.XXXXX\",\"4\":\"0.0.YYYYY\"}
+
 # HTS Token (populated after setup-hedera.ts)
 ASCEND_TOKEN_ID=0.0.XXXXX
+
+# Orchestrator runtime (continuous rounds)
+ORCHESTRATOR_COMMIT_SECS=180
+ORCHESTRATOR_REVEAL_SECS=60
+ORCHESTRATOR_ROUND_SECS=300
+ORCHESTRATOR_ENTRY_FEE_HBAR=1
+ORCHESTRATOR_COOLDOWN_SECS=15
+
+# Optional HTS rewards in orchestrator
+HTS_REWARDS_ENABLED=false
+HTS_REWARD_PER_WINNER_TOKENS=10
+
+# E2E single-round test config
+E2E_COMMIT_SECS=60
+E2E_REVEAL_SECS=30
+E2E_ROUND_SECS=120
+E2E_ENTRY_FEE_HBAR=0.5
+E2E_HTS_REWARDS_ENABLED=true
+E2E_HTS_REWARD_PER_WINNER_TOKENS=1
 
 # AI Agent Config
 OPENAI_API_KEY=sk-...
