@@ -246,6 +246,34 @@ export class ContractClient {
         await tx.wait();
     }
 
+    async claimReward(agentId: number): Promise<void> {
+        const tx: ContractTransactionResponse = await this.vault.claimReward(
+            agentId,
+            { gasLimit: 300_000 }
+        );
+        await tx.wait();
+    }
+
+    async getUserStake(agentId: number, userAddress: string): Promise<string> {
+        const stake = await this.vault.getUserStake(agentId, userAddress);
+        return ethers.formatEther(stake);
+    }
+
+    async getAgentTVL(agentId: number): Promise<string> {
+        const tvl = await this.vault.getAgentTVL(agentId);
+        return ethers.formatEther(tvl);
+    }
+
+    async getRewardPerToken(agentId: number): Promise<string> {
+        const rpt = await this.vault.getRewardPerToken(agentId);
+        return ethers.formatUnits(rpt, 18); // assuming 1e18 precision internally
+    }
+
+    async calculatePendingReward(agentId: number, userAddress: string): Promise<string> {
+        const pending = await this.vault.calculatePendingReward(agentId, userAddress);
+        return ethers.formatEther(pending);
+    }
+
     getSignerAddress(): string {
         return this.signer.address;
     }
