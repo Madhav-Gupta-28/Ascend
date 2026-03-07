@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { mockAgents } from "@/lib/mockData";
 import { X } from "lucide-react";
+import { useAgents } from "@/hooks/useAgents";
+import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 
 interface StakingFormProps {
   agentId?: string;
@@ -11,8 +12,11 @@ interface StakingFormProps {
 export default function StakingForm({ agentId, onClose }: StakingFormProps) {
   const [selectedAgent, setSelectedAgent] = useState(agentId || "");
   const [amount, setAmount] = useState("");
+  const { data: agents = [] } = useAgents();
 
-  const agent = mockAgents.find(a => a.id === selectedAgent);
+  const agent = agents.find(a => String(a.id) === selectedAgent);
+  const directoryMetadata = agent ? getAgentDirectoryEntry(agent.name) : null;
+  const avatar = directoryMetadata?.avatar || "🤖";
 
   return (
     <motion.div
@@ -45,21 +49,24 @@ export default function StakingForm({ agentId, onClose }: StakingFormProps) {
               className="w-full rounded-lg border border-border bg-muted px-4 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="">Choose an agent…</option>
-              {mockAgents.map(a => (
-                <option key={a.id} value={a.id}>{a.avatar} {a.name} — CredScore +{a.credScore}</option>
-              ))}
+              {agents.map(a => {
+                const meta = getAgentDirectoryEntry(a.name);
+                return (
+                  <option key={a.id} value={a.id}>{meta?.avatar || "🤖"} {a.name} — CredScore {a.credScore >= 0 ? "+" : ""}{a.credScore}</option>
+                );
+              })}
             </select>
           </div>
 
           {agent && (
             <div className="rounded-lg border border-border bg-muted/50 p-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-lg">{agent.avatar}</span>
+                <span className="text-lg">{avatar}</span>
                 <span className="font-semibold text-foreground">{agent.name}</span>
               </div>
               <div className="flex gap-4 text-xs text-muted-foreground">
-                <span>Accuracy: <span className="text-foreground">{agent.accuracy}%</span></span>
-                <span>CredScore: <span className="text-success">+{agent.credScore}</span></span>
+                <span>Accuracy: <span className="text-foreground">{agent.accuracy.toFixed(1)}%</span></span>
+                <span>CredScore: <span className={agent.credScore >= 0 ? "text-success" : "text-destructive"}>{agent.credScore >= 0 ? "+" : ""}{agent.credScore}</span></span>
               </div>
             </div>
           )}
@@ -76,7 +83,7 @@ export default function StakingForm({ agentId, onClose }: StakingFormProps) {
           </div>
 
           <button
-            disabled={!selectedAgent || !amount}
+            disabled={!selectedAgent || !amount || Number(amount) <= 0}
             className="w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed glow-primary"
           >
             Confirm Stake

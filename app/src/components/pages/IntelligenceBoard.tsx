@@ -1,13 +1,25 @@
 import { motion } from "framer-motion";
-import { mockAgents, mockCurrentRound, mockNetworkStats } from "@/lib/mockData";
+import { useAgents } from "@/hooks/useAgents";
+import { useCurrentRound } from "@/hooks/useRounds";
+import { useTotalValueLocked } from "@/hooks/useStaking";
 import AgentCard from "@/components/AgentCard";
 import RoundTimer from "@/components/RoundTimer";
 import NetworkStatsPanel from "@/components/NetworkStatsPanel";
-import { ArrowUpRight, Zap } from "lucide-react";
+import { ArrowUpRight, Zap, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 
 export default function IntelligenceBoard() {
-  const round = mockCurrentRound;
+  const { data: agents = [], isLoading: agentsLoading } = useAgents();
+  const { data: round, isLoading: roundLoading } = useCurrentRound();
+  const { data: tvl = 0n } = useTotalValueLocked();
+
+  const networkStats = {
+    totalPredictions: agents.reduce((acc, a) => acc + a.totalPredictions, 0),
+    totalHcsMessages: agents.reduce((acc, a) => acc + a.totalPredictions * 2, 0), // Base logic
+    totalValueStaked: Number(tvl) / 1e8,
+    activeAgents: agents.filter(a => a.active).length,
+  };
 
   return (
     <div className="space-y-8">
@@ -19,7 +31,9 @@ export default function IntelligenceBoard() {
       >
         <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 mb-4">
           <div className="h-1.5 w-1.5 rounded-full bg-success animate-pulse-glow" />
-          <span className="text-xs font-medium text-primary">Live — Round #{round.id}</span>
+          <span className="text-xs font-medium text-primary">
+            {roundLoading ? "Loading round..." : `Live — Round #${round?.id || "---"}`}
+          </span>
         </div>
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">
           <span className="text-gradient-hero">ASCEND</span>
@@ -39,33 +53,43 @@ export default function IntelligenceBoard() {
             transition={{ delay: 0.1 }}
             className="rounded-xl border border-border bg-card p-4"
           >
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-6">
-                <div>
-                  <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Asset</div>
-                  <div className="font-mono font-bold text-foreground">{round.asset}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Start Price</div>
-                  <div className="font-mono font-semibold text-foreground">${round.startPrice.toFixed(4)}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Current</div>
-                  <div className={`font-mono font-semibold ${round.currentPrice >= round.startPrice ? "text-success" : "text-destructive"}`}>
-                    ${round.currentPrice.toFixed(4)}
+            {roundLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : round ? (
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-6">
+                  <div>
+                    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Asset</div>
+                    <div className="font-mono font-bold text-foreground">HBAR</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Start Price</div>
+                    <div className="font-mono font-semibold text-foreground">${round.startPrice.toFixed(4)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Current/End</div>
+                    <div className={`font-mono font-semibold ${round.endPrice >= round.startPrice && round.endPrice > 0 ? "text-success" : round.endPrice > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                      ${round.endPrice > 0 ? round.endPrice.toFixed(4) : "---"}
+                    </div>
                   </div>
                 </div>
+                <div className="flex items-center gap-4">
+                  <RoundTimer endTime={round.status === 0 ? round.commitDeadline : round.status === 1 ? round.revealDeadline : round.resolveAfter} phase={round.status === 0 ? "committing" : round.status === 1 ? "revealing" : round.status === 2 ? "resolved" : "cancelled"} />
+                  <Link
+                    href={`/round/${round.id}`}
+                    className="flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                  >
+                    View Round <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
               </div>
-              <div className="flex items-center gap-4">
-                <RoundTimer endTime={round.endTime} phase={round.phase} />
-                <Link
-                  href={`/round/${round.id}`}
-                  className="flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
-                >
-                  View Round <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
+            ) : (
+              <div className="flex items-center justify-center py-4 text-sm text-muted-foreground">
+                No active rounds found on-chain.
               </div>
-            </div>
+            )}
           </motion.div>
 
           {/* Leaderboard header */}
@@ -84,9 +108,19 @@ export default function IntelligenceBoard() {
 
           {/* Leaderboard */}
           <div className="space-y-2">
-            {mockAgents.map((agent, i) => (
-              <AgentCard key={agent.id} agent={agent} index={i} />
-            ))}
+            {agentsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : agents.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground rounded-xl border border-border bg-card">
+                No agents registered on-chain yet.
+              </div>
+            ) : (
+              agents.map((agent, i) => (
+                <AgentCard key={agent.id} agent={agent} index={i} />
+              ))
+            )}
           </div>
         </div>
 
@@ -98,7 +132,7 @@ export default function IntelligenceBoard() {
             transition={{ delay: 0.3 }}
           >
             <h3 className="text-sm font-semibold text-foreground mb-3">Network Statistics</h3>
-            <NetworkStatsPanel data={mockNetworkStats} />
+            <NetworkStatsPanel data={networkStats} />
           </motion.div>
 
           <motion.div
