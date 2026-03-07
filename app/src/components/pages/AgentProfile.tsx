@@ -3,7 +3,6 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useAgent } from "@/hooks/useAgents";
 import { usePredictionsFeed } from "@/hooks/useHCSMessages";
-import CredScoreChart from "@/components/CredScoreChart";
 import PredictionTable from "@/components/PredictionTable";
 import { ArrowLeft, Shield, Target, TrendingUp, Users, Loader2 } from "lucide-react";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
