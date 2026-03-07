@@ -3,7 +3,8 @@
  * 
  * Creates all Hedera-native resources required for Ascend:
  * 1. HCS topic "ascend-rounds" (prediction reasoning, results, discourse)
- * 2. HTS "ASCEND" fungible token (standalone, not contract-integrated)
+ * 2. HCS topic "hcs10-registry" (agent discovery + handshake bootstrap)
+ * 3. HTS "ASCEND" fungible token (standalone, not contract-integrated)
  * 3. Saves all resource IDs to deployments.json
  * 
  * Run: npx tsx scripts/setup-hedera.ts
@@ -105,7 +106,29 @@ async function createHCSTopic(client: Client): Promise<string> {
 }
 
 // ──────────────────────────────────────────
-// Step 2: Create HTS Token — ASCEND
+// Step 2: Create HCS Topic — hcs10-registry
+// ──────────────────────────────────────────
+
+async function createHCS10RegistryTopic(client: Client): Promise<string> {
+    console.log("\n🛰️  Creating HCS topic: hcs10-registry...");
+
+    const operatorKey = PrivateKey.fromStringED25519(OPERATOR_KEY!);
+
+    const tx = new TopicCreateTransaction()
+        .setTopicMemo("hcs10-registry")
+        .setAdminKey(operatorKey.publicKey)
+        .setAutoRenewAccountId(AccountId.fromString(OPERATOR_ID!));
+
+    const response = await tx.execute(client);
+    const receipt = await response.getReceipt(client);
+    const topicId = receipt.topicId!.toString();
+
+    console.log(`   ✅ Topic created: ${topicId}`);
+    return topicId;
+}
+
+// ──────────────────────────────────────────
+// Step 3: Create HTS Token — ASCEND
 // ──────────────────────────────────────────
 
 async function createHTSToken(client: Client): Promise<string> {
@@ -148,6 +171,7 @@ interface Deployments {
     operatorId: string;
     hcs: {
         ascendRoundsTopicId: string;
+        hcs10RegistryTopicId: string;
     };
     hts: {
         ascendTokenId: string;
@@ -159,7 +183,7 @@ interface Deployments {
     createdAt: string;
 }
 
-function saveDeployments(topicId: string, tokenId: string): void {
+function saveDeployments(topicId: string, registryTopicId: string, tokenId: string): void {
     const deploymentsPath = path.resolve(process.cwd(), "../deployments.json");
 
     // Merge with existing deployments (from forge script) if they exist
@@ -173,6 +197,7 @@ function saveDeployments(topicId: string, tokenId: string): void {
         operatorId: OPERATOR_ID!,
         hcs: {
             ascendRoundsTopicId: topicId,
+            hcs10RegistryTopicId: registryTopicId,
         },
         hts: {
             ascendTokenId: tokenId,
@@ -211,6 +236,35 @@ PREDICTION_MARKET_ADDRESS=0x...
 
 # HCS Topics (populated after setup-hedera.ts)
 ASCEND_ROUNDS_TOPIC_ID=0.0.XXXXX
+HCS10_REGISTRY_TOPIC_ID=0.0.XXXXX
+
+# Optional per-agent HCS-10 identities
+SENTINEL_ACCOUNT_ID=0.0.XXXXX
+SENTINEL_PRIVATE_KEY=302e020100...
+PULSE_ACCOUNT_ID=0.0.XXXXX
+PULSE_PRIVATE_KEY=302e020100...
+MERIDIAN_ACCOUNT_ID=0.0.XXXXX
+MERIDIAN_PRIVATE_KEY=302e020100...
+ORACLE_ACCOUNT_ID=0.0.XXXXX
+ORACLE_PRIVATE_KEY=302e020100...
+
+# Optional: Explicit HCS-10 keys/topics per agent
+SENTINEL_HCS10_ACCOUNT_ID=0.0.XXXXX
+SENTINEL_HCS10_PRIVATE_KEY=302e020100...
+SENTINEL_HCS10_INBOUND_TOPIC_ID=0.0.XXXXX
+SENTINEL_HCS10_OUTBOUND_TOPIC_ID=0.0.XXXXX
+PULSE_HCS10_ACCOUNT_ID=0.0.XXXXX
+PULSE_HCS10_PRIVATE_KEY=302e020100...
+PULSE_HCS10_INBOUND_TOPIC_ID=0.0.XXXXX
+PULSE_HCS10_OUTBOUND_TOPIC_ID=0.0.XXXXX
+MERIDIAN_HCS10_ACCOUNT_ID=0.0.XXXXX
+MERIDIAN_HCS10_PRIVATE_KEY=302e020100...
+MERIDIAN_HCS10_INBOUND_TOPIC_ID=0.0.XXXXX
+MERIDIAN_HCS10_OUTBOUND_TOPIC_ID=0.0.XXXXX
+ORACLE_HCS10_ACCOUNT_ID=0.0.XXXXX
+ORACLE_HCS10_PRIVATE_KEY=302e020100...
+ORACLE_HCS10_INBOUND_TOPIC_ID=0.0.XXXXX
+ORACLE_HCS10_OUTBOUND_TOPIC_ID=0.0.XXXXX
 
 # HTS Token (populated after setup-hedera.ts)
 ASCEND_TOKEN_ID=0.0.XXXXX
@@ -245,20 +299,24 @@ async function main() {
         // 1. Create HCS topic
         const topicId = await createHCSTopic(client);
 
-        // 2. Create HTS token
+        // 2. Create HCS-10 registry topic
+        const hcs10RegistryTopicId = await createHCS10RegistryTopic(client);
+
+        // 3. Create HTS token
         const tokenId = await createHTSToken(client);
 
-        // 3. Save deployments
-        saveDeployments(topicId, tokenId);
+        // 4. Save deployments
+        saveDeployments(topicId, hcs10RegistryTopicId, tokenId);
 
-        // 4. Generate .env.example
+        // 5. Generate .env.example
         generateEnvExample();
 
         console.log("\n═══════════════════════════════════════════");
         console.log("  ✅ Setup Complete!");
         console.log("═══════════════════════════════════════════");
-        console.log(`  HCS Topic:   ${topicId}`);
-        console.log(`  HTS Token:   ${tokenId}`);
+        console.log(`  HCS Topic (rounds):  ${topicId}`);
+        console.log(`  HCS-10 Registry:     ${hcs10RegistryTopicId}`);
+        console.log(`  HTS Token:           ${tokenId}`);
         console.log("");
         console.log("  Next steps:");
         console.log("  1. Add DEPLOYER_PRIVATE_KEY (ECDSA hex) to .env");

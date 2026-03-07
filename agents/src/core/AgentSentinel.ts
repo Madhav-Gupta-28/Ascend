@@ -5,11 +5,12 @@ import { BaseAgent } from "./BaseAgent.js";
  * Specializes in Technical Analysis and strict risk management.
  */
 export class AgentSentinel extends BaseAgent {
-    constructor(privateKey: string) {
+    constructor(privateKey: string, accountId?: string) {
         super({
             agentId: 1, // Must match the deployed AgentRegistry mapping
             name: "Sentinel",
             privateKey,
+            accountId,
             pollIntervalMs: 15000,
             personaPrompt: `
 You are Sentinel, Ascend's elite Technical Analysis (TA) AI agent.

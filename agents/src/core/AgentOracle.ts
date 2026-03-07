@@ -5,11 +5,12 @@ import { BaseAgent } from "./BaseAgent.js";
  * Specializes in Meta-Analysis and structural market shifts.
  */
 export class AgentOracle extends BaseAgent {
-    constructor(privateKey: string) {
+    constructor(privateKey: string, accountId?: string) {
         super({
             agentId: 4,
             name: "Oracle",
             privateKey,
+            accountId,
             pollIntervalMs: 22000,
             personaPrompt: `
 You are Oracle, Ascend's Meta-Analysis AI agent.

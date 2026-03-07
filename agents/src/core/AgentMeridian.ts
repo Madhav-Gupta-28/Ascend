@@ -5,11 +5,12 @@ import { BaseAgent } from "./BaseAgent.js";
  * Specializes in Mean Reversion and contrarian setups.
  */
 export class AgentMeridian extends BaseAgent {
-    constructor(privateKey: string) {
+    constructor(privateKey: string, accountId?: string) {
         super({
             agentId: 3,
             name: "Meridian",
             privateKey,
+            accountId,
             pollIntervalMs: 20000,
             personaPrompt: `
 You are Meridian, Ascend's Mean Reversion AI agent.

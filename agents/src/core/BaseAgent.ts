@@ -19,6 +19,7 @@ import { z } from "zod";
 import { ContractClient, createContractClient } from "./contract-client.js";
 import { HCSPublisher, createHCSPublisher } from "./hcs-publisher.js";
 import { DataCollector, type MarketData } from "./data-collector.js";
+import { HCS10CommunicationNetwork } from "./hcs10-network.js";
 
 // ── Types ──
 
@@ -35,6 +36,7 @@ export interface AgentState {
         commitHash: string;
         committed: boolean;
         revealed: boolean;
+        reasoningPublished: boolean;
     }>;
 }
 
@@ -42,13 +44,16 @@ export interface AgentConfig {
     agentId: number;
     name: string;
     privateKey: string;     // Agent's own Hedera ECDSA key
+    accountId?: string;     // Hedera account id for HCS-10 identity
     personaPrompt: string;  // LLM context
+    hcs10Capabilities?: string[];
     pollIntervalMs?: number;
 }
 
 export abstract class BaseAgent {
     protected client: ContractClient;
     protected hcs: HCSPublisher;
+    protected hcs10: HCS10CommunicationNetwork | null = null;
     protected dataCollector: DataCollector;
     protected config: AgentConfig;
 
@@ -76,6 +81,7 @@ export abstract class BaseAgent {
         // or we use the agent's key + topic allows all submitters)
         // For hackathon: using operator key for HCS submissions to avoid 100x topic permissions
         this.hcs = createHCSPublisher();
+        this.hcs10 = this.createHCS10Network();
 
         this.dataCollector = new DataCollector(process.env.COINGECKO_API_KEY);
 
@@ -84,6 +90,49 @@ export abstract class BaseAgent {
         // Local state persistence ensures recovery if process crashes between commit/reveal
         this.stateFilePath = path.resolve(process.cwd(), `.cache/agent_${config.agentId}_state.json`);
         this.state = this.loadState();
+    }
+
+    private createHCS10Network(): HCS10CommunicationNetwork | null {
+        const registryTopicId = process.env.HCS10_REGISTRY_TOPIC_ID;
+        if (!registryTopicId) {
+            return null;
+        }
+
+        const idPrefix = this.config.name.toUpperCase();
+        const accountId =
+            process.env[`${idPrefix}_HCS10_ACCOUNT_ID`] ||
+            this.config.accountId ||
+            process.env.HEDERA_OPERATOR_ID;
+        if (!accountId) {
+            console.warn(`[${this.config.name}] HCS-10 disabled: missing account id`);
+            return null;
+        }
+
+        const privateKey =
+            process.env[`${idPrefix}_HCS10_PRIVATE_KEY`] ||
+            process.env.HEDERA_OPERATOR_KEY ||
+            this.config.privateKey;
+        if (!privateKey) {
+            console.warn(`[${this.config.name}] HCS-10 disabled: missing private key`);
+            return null;
+        }
+
+        const inboundTopicId = process.env[`${idPrefix}_HCS10_INBOUND_TOPIC_ID`];
+        const outboundTopicId = process.env[`${idPrefix}_HCS10_OUTBOUND_TOPIC_ID`];
+
+        return new HCS10CommunicationNetwork({
+            network: (process.env.HEDERA_NETWORK as "testnet" | "mainnet" | undefined) ?? "testnet",
+            operatorAccountId: accountId,
+            operatorPrivateKey: privateKey,
+            registryTopicId,
+            agentId: String(this.config.agentId),
+            agentName: this.config.name,
+            inboundTopicId,
+            outboundTopicId,
+            autoCreateTopics: !(inboundTopicId && outboundTopicId),
+            capabilities: this.config.hcs10Capabilities ?? ["reasoning", "qa"],
+            mirrorNodeBaseUrl: process.env.HEDERA_MIRROR_NODE,
+        });
     }
 
     // ── State Management ──
@@ -117,6 +166,18 @@ export abstract class BaseAgent {
         this.isRunning = true;
         console.log(`[${this.config.name}] 🟢 Agent runtime started. Polling every ${this.config.pollIntervalMs}ms...`);
 
+        if (this.hcs10) {
+            try {
+                await this.hcs10.bootstrap();
+                const identity = this.hcs10.getIdentity();
+                console.log(
+                    `[${this.config.name}] 🔗 HCS-10 identity ready (${identity.operatorId}, inbound=${identity.inboundTopicId}, outbound=${identity.outboundTopicId})`,
+                );
+            } catch (error: any) {
+                console.error(`[${this.config.name}] ⚠️ HCS-10 bootstrap failed: ${error.message}`);
+            }
+        }
+
         while (this.isRunning) {
             try {
                 await this.syncWithChain();
@@ -133,6 +194,15 @@ export abstract class BaseAgent {
     }
 
     private async syncWithChain() {
+        if (this.hcs10) {
+            try {
+                await this.hcs10.sync();
+                await this.handleUserQuestions();
+            } catch (err: any) {
+                console.error(`[${this.config.name}] ⚠️ HCS-10 sync failed: ${err.message}`);
+            }
+        }
+
         const roundCount = await this.client.getRoundCount();
         if (roundCount === 0) return;
 
@@ -171,7 +241,7 @@ export abstract class BaseAgent {
         const marketData = await this.dataCollector.collectMarketData();
 
         // 2. LLM Analysis
-        const prediction = await this.analyze(marketData);
+        const prediction = await this.analyze(marketData, { roundId });
         const directionNum = prediction.direction === "UP" ? 0 : 1;
 
         // 3. Crypto Security: Generate Salt & Hash
@@ -188,6 +258,7 @@ export abstract class BaseAgent {
             commitHash,
             committed: false,
             revealed: false,
+            reasoningPublished: false,
         };
         this.saveState();
 
@@ -198,7 +269,31 @@ export abstract class BaseAgent {
         this.state.activeRoundId = roundId;
         this.saveState();
 
+        await this.publishReasoningToHCS10(roundId);
+
         console.log(`[${this.config.name}] ✅ Committed prediction for round #${roundId}: ${prediction.direction} (${prediction.confidence}%)`);
+    }
+
+    private async publishReasoningToHCS10(roundId: number): Promise<void> {
+        const commitment = this.state.commitments[roundId];
+        if (!commitment || commitment.reasoningPublished) return;
+        if (!this.hcs10) return;
+
+        try {
+            const peersReached = await this.hcs10.publishReasoning(
+                roundId,
+                commitment.commitHash,
+                commitment.confidence,
+                commitment.reasoning,
+            );
+            commitment.reasoningPublished = true;
+            this.saveState();
+            console.log(
+                `[${this.config.name}] 🧠 Published HCS-10 reasoning for round #${roundId} to ${peersReached} peer connections`,
+            );
+        } catch (err: any) {
+            console.error(`[${this.config.name}] ⚠️ Failed to publish HCS-10 reasoning: ${err.message}`);
+        }
     }
 
     private async handleRevealPhase(roundId: number) {
@@ -241,7 +336,16 @@ export abstract class BaseAgent {
      * Default implementation uses OpenAI GPT-4o with structured JSON output.
      * Can be overridden by subclasses for specific multi-agent strategies.
      */
-    protected async analyze(data: MarketData): Promise<{ direction: "UP" | "DOWN", confidence: number, reasoning: string }> {
+    protected async analyze(
+        data: MarketData,
+        context?: { roundId?: number },
+    ): Promise<{ direction: "UP" | "DOWN", confidence: number, reasoning: string }> {
+        const roundId = context?.roundId;
+        const peerReasoningContext =
+            this.hcs10 && roundId
+                ? this.hcs10.getReasoningContext(roundId, 6)
+                : "No peer reasoning context available.";
+
         const prompt = `
 ${this.config.personaPrompt}
 
@@ -254,6 +358,9 @@ Price: $${data.price.currentPrice.toFixed(4)}
 
 Recent OHLC (last ${data.ohlc.length} periods):
 ${JSON.stringify(data.ohlc, null, 2)}
+
+Peer Reasoning Context (HCS-10):
+${peerReasoningContext}
 
 Task: Predict whether the HBAR/USD price will be UP or DOWN over the next round duration.
 You must provide a confidence score (0-100) and concise reasoning (under 500 characters).
@@ -279,6 +386,50 @@ You must provide a confidence score (0-100) and concise reasoning (under 500 cha
                 confidence: 50,
                 reasoning: "LLM timeout. Defaulting to safe neutral historical upward bias."
             };
+        }
+    }
+
+    private async handleUserQuestions(): Promise<void> {
+        if (!this.hcs10) return;
+
+        const questions = this.hcs10.drainQuestionInbox();
+        if (questions.length === 0) return;
+
+        for (const q of questions) {
+            try {
+                const prompt = `
+You are ${this.config.name}, an AI trading agent on Ascend.
+Answer the user's question concisely and honestly.
+If the question asks for certainty, state uncertainty explicitly.
+
+Question:
+${q.payload.question}
+                `;
+
+                const { object } = await generateObject({
+                    model: this.openai("gpt-4o"),
+                    schema: z.object({
+                        answer: z.string().min(1).max(1200),
+                        confidence: z.number().min(0).max(100),
+                    }),
+                    prompt,
+                });
+
+                await this.hcs10.sendAnswer(
+                    q.connectionTopicId,
+                    q.payload.questionId,
+                    object.answer,
+                    object.confidence,
+                );
+
+                console.log(
+                    `[${this.config.name}] 💬 Answered user question ${q.payload.questionId} on ${q.connectionTopicId}`,
+                );
+            } catch (error: any) {
+                console.error(
+                    `[${this.config.name}] ⚠️ Failed to answer question ${q.payload.questionId}: ${error.message}`,
+                );
+            }
         }
     }
 }

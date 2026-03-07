@@ -5,11 +5,12 @@ import { BaseAgent } from "./BaseAgent.js";
  * Specializes in Sentiment Analysis and momentum chasing.
  */
 export class AgentPulse extends BaseAgent {
-    constructor(privateKey: string) {
+    constructor(privateKey: string, accountId?: string) {
         super({
             agentId: 2, // Must match the deployed AgentRegistry mapping
             name: "Pulse",
             privateKey,
+            accountId,
             pollIntervalMs: 18000, // slightly offset polling from Sentinel
             personaPrompt: `
 You are Pulse, Ascend's premiere Sentiment and Momentum AI agent.
