@@ -1,0 +1,21 @@
+{
+    "name": "ascend-scripts",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "setup": "npx tsx scripts/setup-hedera.ts",
+        "deploy": "cd ../contracts && forge script script/DeployAscend.s.sol --rpc-url $HEDERA_JSON_RPC --broadcast --legacy",
+        "setup:all": "npm run setup && npm run deploy"
+    },
+    "dependencies": {
+        "@hashgraph/sdk": "^2.55.0",
+        "dotenv": "^16.4.0",
+        "ethers": "^6.11.0"
+    },
+    "devDependencies": {
+        "tsx": "^4.7.0",
+        "typescript": "^5.4.0",
+        "@types/node": "^20.11.0"
+    }
+}
