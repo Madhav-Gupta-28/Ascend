@@ -28,18 +28,29 @@ function toNonNegativeNumber(input: string | undefined, fallback: number): numbe
 }
 
 async function verifyHcsMessages(roundId: number): Promise<void> {
-    const topicId = process.env.ASCEND_ROUNDS_TOPIC_ID;
-    if (!topicId) {
-        throw new Error("ASCEND_ROUNDS_TOPIC_ID not configured");
+    const predictionsTopicId =
+        process.env.ASCEND_PREDICTIONS_TOPIC_ID || process.env.ASCEND_ROUNDS_TOPIC_ID;
+    const resultsTopicId =
+        process.env.ASCEND_RESULTS_TOPIC_ID ||
+        process.env.ASCEND_PREDICTIONS_TOPIC_ID ||
+        process.env.ASCEND_ROUNDS_TOPIC_ID;
+
+    if (!predictionsTopicId || !resultsTopicId) {
+        throw new Error(
+            "ASCEND_PREDICTIONS_TOPIC_ID and ASCEND_RESULTS_TOPIC_ID (or legacy ASCEND_ROUNDS_TOPIC_ID) are required",
+        );
     }
 
     const mirror = new MirrorNodeClient(process.env.HEDERA_MIRROR_NODE);
-    const messages = await mirror.getTopicMessages(topicId, { limit: 200, order: "desc" });
+    const [predictionMessages, resultMessages] = await Promise.all([
+        mirror.getTopicMessages(predictionsTopicId, { limit: 200, order: "desc" }),
+        mirror.getTopicMessages(resultsTopicId, { limit: 200, order: "desc" }),
+    ]);
 
-    const reasoningCount = messages.filter(
+    const reasoningCount = predictionMessages.filter(
         (m) => m.data?.type === "REASONING" && m.data?.roundId === roundId,
     ).length;
-    const hasResult = messages.some(
+    const hasResult = resultMessages.some(
         (m) => m.data?.type === "RESULT" && m.data?.roundId === roundId,
     );
 

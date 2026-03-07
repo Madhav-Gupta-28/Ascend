@@ -1,12 +1,14 @@
 /**
  * Ascend — Hedera Infrastructure Setup Script
- * 
+ *
  * Creates all Hedera-native resources required for Ascend:
- * 1. HCS topic "ascend-rounds" (prediction reasoning, results, discourse)
- * 2. HCS topic "hcs10-registry" (agent discovery + handshake bootstrap)
- * 3. HTS "ASCEND" fungible token (standalone, not contract-integrated)
- * 4. Saves all resource IDs to deployments.json
- * 
+ * 1. HCS topic "ascend-predictions"
+ * 2. HCS topic "ascend-results"
+ * 3. HCS topics "ascend-discourse-{agent}" per agent
+ * 4. HCS topic "hcs10-registry"
+ * 5. HTS "ASCEND" fungible token
+ * 6. Saves all resource IDs to deployments.json
+ *
  * Run: npx tsx scripts/setup-hedera.ts
  */
 
@@ -20,31 +22,24 @@ import {
     TokenType,
     TokenSupplyType,
     Hbar,
+    TopicId,
 } from "@hashgraph/sdk";
 import * as fs from "fs";
 import * as path from "path";
 import { config } from "dotenv";
 
-// Load env from project root
 config({ path: path.resolve(process.cwd(), "../.env") });
-
-// ──────────────────────────────────────────
-// Configuration
-// ──────────────────────────────────────────
 
 const OPERATOR_ID = process.env.HEDERA_OPERATOR_ID;
 const OPERATOR_KEY = process.env.HEDERA_OPERATOR_KEY;
 const NETWORK = process.env.HEDERA_NETWORK || "testnet";
+const DISCOURSE_AGENTS = ["sentinel", "pulse", "meridian", "oracle"] as const;
 
 if (!OPERATOR_ID || !OPERATOR_KEY) {
     console.error("❌ Missing HEDERA_OPERATOR_ID or HEDERA_OPERATOR_KEY in .env");
     console.error("   Create a testnet account at https://portal.hedera.com");
     process.exit(1);
 }
-
-// ──────────────────────────────────────────
-// Initialize Hedera Client
-// ──────────────────────────────────────────
 
 function createClient(): Client {
     const operatorId = AccountId.fromString(OPERATOR_ID!);
@@ -66,70 +61,92 @@ function createClient(): Client {
     return client;
 }
 
-// ──────────────────────────────────────────
-// Step 1: Create HCS Topic — ascend-rounds
-// ──────────────────────────────────────────
-
-async function createHCSTopic(client: Client): Promise<string> {
-    console.log("\n📡 Creating HCS topic: ascend-rounds...");
-
+async function createTopic(
+    client: Client,
+    memo: string,
+    options: { submitRestricted?: boolean } = {},
+): Promise<string> {
     const operatorKey = PrivateKey.fromStringED25519(OPERATOR_KEY!);
-
     const tx = new TopicCreateTransaction()
-        .setTopicMemo("ascend-rounds")
+        .setTopicMemo(memo)
         .setAdminKey(operatorKey.publicKey)
-        .setSubmitKey(operatorKey.publicKey) // Only operator can submit
         .setAutoRenewAccountId(AccountId.fromString(OPERATOR_ID!));
+
+    if (options.submitRestricted ?? true) {
+        tx.setSubmitKey(operatorKey.publicKey);
+    }
 
     const response = await tx.execute(client);
     const receipt = await response.getReceipt(client);
     const topicId = receipt.topicId!.toString();
 
-    console.log(`   ✅ Topic created: ${topicId}`);
+    return topicId;
+}
 
-    // Verify with a test message
-    console.log("   📝 Sending test message...");
-    const testMsg = JSON.stringify({
+async function sendTopicProbe(
+    client: Client,
+    topicId: string,
+    payload: Record<string, unknown>,
+): Promise<void> {
+    const tx = new TopicMessageSubmitTransaction()
+        .setTopicId(TopicId.fromString(topicId))
+        .setMessage(JSON.stringify(payload));
+    const response = await tx.execute(client);
+    await response.getReceipt(client);
+}
+
+interface HcsTopicSet {
+    ascendPredictionsTopicId: string;
+    ascendResultsTopicId: string;
+    discourseTopicIds: Record<string, string>;
+    hcs10RegistryTopicId: string;
+}
+
+async function createHcsTopics(client: Client): Promise<HcsTopicSet> {
+    console.log("\n📡 Creating HCS topics...");
+
+    const ascendPredictionsTopicId = await createTopic(client, "ascend-predictions", {
+        submitRestricted: true,
+    });
+    console.log(`   ✅ ascend-predictions: ${ascendPredictionsTopicId}`);
+
+    const ascendResultsTopicId = await createTopic(client, "ascend-results", {
+        submitRestricted: true,
+    });
+    console.log(`   ✅ ascend-results:     ${ascendResultsTopicId}`);
+
+    const discourseTopicIds: Record<string, string> = {};
+    for (const agent of DISCOURSE_AGENTS) {
+        const topicId = await createTopic(client, `ascend-discourse-${agent}`, {
+            submitRestricted: false,
+        });
+        discourseTopicIds[agent] = topicId;
+        console.log(`   ✅ ascend-discourse-${agent}: ${topicId}`);
+    }
+
+    const hcs10RegistryTopicId = await createTopic(client, "hcs10-registry", {
+        submitRestricted: false,
+    });
+    console.log(`   ✅ hcs10-registry:     ${hcs10RegistryTopicId}`);
+
+    await sendTopicProbe(client, ascendPredictionsTopicId, {
         type: "SYSTEM",
-        message: "Ascend topic initialized",
+        message: "Ascend predictions topic initialized",
+        createdAt: new Date().toISOString(),
+    });
+    await sendTopicProbe(client, ascendResultsTopicId, {
+        type: "SYSTEM",
+        message: "Ascend results topic initialized",
+        createdAt: new Date().toISOString(),
     });
 
-    const msgTx = new TopicMessageSubmitTransaction()
-        .setTopicId(receipt.topicId!)
-        .setMessage(testMsg);
-
-    const msgResponse = await msgTx.execute(client);
-    await msgResponse.getReceipt(client);
-    console.log("   ✅ Test message sent successfully");
-
-    return topicId;
+    return {
+        ascendPredictionsTopicId,
+        ascendResultsTopicId,
+        discourseTopicIds,
+        hcs10RegistryTopicId,
+    };
 }
-
-// ──────────────────────────────────────────
-// Step 2: Create HCS Topic — hcs10-registry
-// ──────────────────────────────────────────
-
-async function createHCS10RegistryTopic(client: Client): Promise<string> {
-    console.log("\n🛰️  Creating HCS topic: hcs10-registry...");
-
-    const operatorKey = PrivateKey.fromStringED25519(OPERATOR_KEY!);
-
-    const tx = new TopicCreateTransaction()
-        .setTopicMemo("hcs10-registry")
-        .setAdminKey(operatorKey.publicKey)
-        .setAutoRenewAccountId(AccountId.fromString(OPERATOR_ID!));
-
-    const response = await tx.execute(client);
-    const receipt = await response.getReceipt(client);
-    const topicId = receipt.topicId!.toString();
-
-    console.log(`   ✅ Topic created: ${topicId}`);
-    return topicId;
-}
-
-// ──────────────────────────────────────────
-// Step 3: Create HTS Token — ASCEND
-// ──────────────────────────────────────────
 
 async function createHTSToken(client: Client): Promise<string> {
     console.log("\n🪙  Creating HTS token: ASCEND...");
@@ -142,7 +159,7 @@ async function createHTSToken(client: Client): Promise<string> {
         .setTokenSymbol("ASCEND")
         .setTokenType(TokenType.FungibleCommon)
         .setSupplyType(TokenSupplyType.Finite)
-        .setMaxSupply(1_000_000_00000000) // 1M tokens with 8 decimals
+        .setMaxSupply(1_000_000_00000000)
         .setInitialSupply(1_000_000_00000000)
         .setDecimals(8)
         .setTreasuryAccountId(operatorId)
@@ -155,23 +172,22 @@ async function createHTSToken(client: Client): Promise<string> {
     const tokenId = receipt.tokenId!.toString();
 
     console.log(`   ✅ Token created: ${tokenId}`);
-    console.log(`      Name:    Ascend Intelligence Token`);
-    console.log(`      Symbol:  ASCEND`);
-    console.log(`      Supply:  1,000,000 (8 decimals)`);
+    console.log("      Name:    Ascend Intelligence Token");
+    console.log("      Symbol:  ASCEND");
+    console.log("      Supply:  1,000,000 (8 decimals)");
 
     return tokenId;
 }
-
-// ──────────────────────────────────────────
-// Step 3: Save Deployments
-// ──────────────────────────────────────────
 
 interface Deployments {
     network: string;
     operatorId: string;
     hcs: {
-        ascendRoundsTopicId: string;
+        ascendPredictionsTopicId: string;
+        ascendResultsTopicId: string;
+        discourseTopicIds: Record<string, string>;
         hcs10RegistryTopicId: string;
+        ascendRoundsTopicId?: string;
     };
     hts: {
         ascendTokenId: string;
@@ -184,10 +200,9 @@ interface Deployments {
     createdAt: string;
 }
 
-function saveDeployments(topicId: string, registryTopicId: string, tokenId: string): void {
+function saveDeployments(hcsTopics: HcsTopicSet, tokenId: string): void {
     const deploymentsPath = path.resolve(process.cwd(), "../deployments.json");
 
-    // Merge with existing deployments (from forge script) if they exist
     let existing: Partial<Deployments> = {};
     if (fs.existsSync(deploymentsPath)) {
         existing = JSON.parse(fs.readFileSync(deploymentsPath, "utf-8"));
@@ -197,8 +212,12 @@ function saveDeployments(topicId: string, registryTopicId: string, tokenId: stri
         network: NETWORK,
         operatorId: OPERATOR_ID!,
         hcs: {
-            ascendRoundsTopicId: topicId,
-            hcs10RegistryTopicId: registryTopicId,
+            ascendPredictionsTopicId: hcsTopics.ascendPredictionsTopicId,
+            ascendResultsTopicId: hcsTopics.ascendResultsTopicId,
+            discourseTopicIds: hcsTopics.discourseTopicIds,
+            hcs10RegistryTopicId: hcsTopics.hcs10RegistryTopicId,
+            // Legacy alias retained for backward compatibility
+            ascendRoundsTopicId: hcsTopics.ascendPredictionsTopicId,
         },
         hts: {
             ascendTokenId: tokenId,
@@ -215,10 +234,6 @@ function saveDeployments(topicId: string, registryTopicId: string, tokenId: stri
     console.log(`\n📄 Deployments saved to ${deploymentsPath}`);
 }
 
-// ──────────────────────────────────────────
-// Step 4: Generate .env.example
-// ──────────────────────────────────────────
-
 function generateEnvExample(): void {
     const envExamplePath = path.resolve(process.cwd(), "../.env.example");
 
@@ -228,6 +243,8 @@ HEDERA_OPERATOR_ID=0.0.XXXXX
 HEDERA_OPERATOR_KEY=302e020100...
 HEDERA_JSON_RPC=https://testnet.hashio.io/api
 HEDERA_MIRROR_NODE=https://testnet.mirrornode.hedera.com
+NEXT_PUBLIC_HEDERA_NETWORK=testnet
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=wc_project_id_here
 
 # Deployer private key (ECDSA hex for Foundry)
 DEPLOYER_PRIVATE_KEY=0x...
@@ -238,8 +255,17 @@ PREDICTION_MARKET_ADDRESS=0x...
 STAKING_VAULT_ADDRESS=0x...
 
 # HCS Topics (populated after setup-hedera.ts)
-ASCEND_ROUNDS_TOPIC_ID=0.0.XXXXX
+ASCEND_PREDICTIONS_TOPIC_ID=0.0.XXXXX
+ASCEND_RESULTS_TOPIC_ID=0.0.XXXXX
+ASCEND_DISCOURSE_SENTINEL_TOPIC_ID=0.0.XXXXX
+ASCEND_DISCOURSE_PULSE_TOPIC_ID=0.0.XXXXX
+ASCEND_DISCOURSE_MERIDIAN_TOPIC_ID=0.0.XXXXX
+ASCEND_DISCOURSE_ORACLE_TOPIC_ID=0.0.XXXXX
+ASCEND_DISCOURSE_TOPICS_JSON={"sentinel":"0.0.XXXXX","pulse":"0.0.YYYYY","meridian":"0.0.ZZZZZ","oracle":"0.0.AAAAA"}
 HCS10_REGISTRY_TOPIC_ID=0.0.XXXXX
+
+# Legacy fallback (kept for backward compatibility)
+ASCEND_ROUNDS_TOPIC_ID=0.0.XXXXX
 
 # Optional per-agent HCS-10 identities
 SENTINEL_ACCOUNT_ID=0.0.XXXXX
@@ -272,7 +298,7 @@ ORACLE_HCS10_OUTBOUND_TOPIC_ID=0.0.XXXXX
 # Optional: Web relay identity and manual routing for discourse question.ask
 WEB_HCS10_OPERATOR_ID=0.0.XXXXX@0.0.XXXXX
 WEB_HCS10_INBOUND_TOPIC_ID=0.0.XXXXX
-HCS10_CONNECTION_TOPICS_JSON={\"1\":\"0.0.XXXXX\",\"4\":\"0.0.YYYYY\"}
+HCS10_CONNECTION_TOPICS_JSON={"1":"0.0.XXXXX","4":"0.0.YYYYY"}
 
 # HTS Token (populated after setup-hedera.ts)
 ASCEND_TOKEN_ID=0.0.XXXXX
@@ -303,15 +329,9 @@ OPENAI_API_KEY=sk-...
 COINGECKO_API_KEY=CG-...
 `;
 
-    if (!fs.existsSync(envExamplePath)) {
-        fs.writeFileSync(envExamplePath, content);
-        console.log(`📋 .env.example created at ${envExamplePath}`);
-    }
+    fs.writeFileSync(envExamplePath, content);
+    console.log(`📋 .env.example updated at ${envExamplePath}`);
 }
-
-// ──────────────────────────────────────────
-// Main
-// ──────────────────────────────────────────
 
 async function main() {
     console.log("═══════════════════════════════════════════");
@@ -323,27 +343,21 @@ async function main() {
     const client = createClient();
 
     try {
-        // 1. Create HCS topic
-        const topicId = await createHCSTopic(client);
-
-        // 2. Create HCS-10 registry topic
-        const hcs10RegistryTopicId = await createHCS10RegistryTopic(client);
-
-        // 3. Create HTS token
+        const hcsTopics = await createHcsTopics(client);
         const tokenId = await createHTSToken(client);
-
-        // 4. Save deployments
-        saveDeployments(topicId, hcs10RegistryTopicId, tokenId);
-
-        // 5. Generate .env.example
+        saveDeployments(hcsTopics, tokenId);
         generateEnvExample();
 
         console.log("\n═══════════════════════════════════════════");
         console.log("  ✅ Setup Complete!");
         console.log("═══════════════════════════════════════════");
-        console.log(`  HCS Topic (rounds):  ${topicId}`);
-        console.log(`  HCS-10 Registry:     ${hcs10RegistryTopicId}`);
-        console.log(`  HTS Token:           ${tokenId}`);
+        console.log(`  HCS Predictions:      ${hcsTopics.ascendPredictionsTopicId}`);
+        console.log(`  HCS Results:          ${hcsTopics.ascendResultsTopicId}`);
+        for (const agent of DISCOURSE_AGENTS) {
+            console.log(`  HCS Discourse ${agent}: ${hcsTopics.discourseTopicIds[agent]}`);
+        }
+        console.log(`  HCS-10 Registry:      ${hcsTopics.hcs10RegistryTopicId}`);
+        console.log(`  HTS Token:            ${tokenId}`);
         console.log("");
         console.log("  Next steps:");
         console.log("  1. Add DEPLOYER_PRIVATE_KEY (ECDSA hex) to .env");

@@ -3,9 +3,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { mockStakePositions, mockAgents } from "@/lib/mockData";
 import StakingForm from "@/components/StakingForm";
 import { Wallet, TrendingUp, Plus, ArrowDownToLine } from "lucide-react";
+import { useHederaWallet } from "@/hooks/use-hedera-wallet";
 
 export default function StakingDashboard() {
   const [showStakeModal, setShowStakeModal] = useState(false);
+  const { selectedAccountId } = useHederaWallet();
 
   const totalStaked = mockStakePositions.reduce((sum, p) => sum + p.amount, 0);
   const totalRewards = mockStakePositions.reduce((sum, p) => sum + p.rewards, 0);
@@ -29,7 +31,9 @@ export default function StakingDashboard() {
             <Wallet className="h-4 w-4 text-primary" />
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Wallet Balance</span>
           </div>
-          <div className="font-mono text-2xl font-bold text-foreground">12,450 <span className="text-sm text-muted-foreground">HBAR</span></div>
+          <div className="font-mono text-lg font-bold text-foreground">
+            {selectedAccountId || "Connect HashPack"}
+          </div>
         </motion.div>
 
         <motion.div

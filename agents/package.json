@@ -9,15 +9,20 @@
         "setup:all": "npm run setup && npm run deploy",
         "check": "npx tsc --noEmit",
         "test:hcs10": "npx tsx scripts/test-hcs10-simulation.ts",
+        "test:agent-kit": "npx tsx scripts/test-hedera-agent-kit.ts",
         "run:orchestrator": "npx tsx scripts/run-orchestrator.ts",
         "test:e2e:testnet": "npx tsx scripts/testnet-e2e-round.ts"
     },
     "dependencies": {
         "@ai-sdk/openai": "^3.0.41",
         "@hashgraph/sdk": "^2.55.0",
+        "@langchain/core": "^1.1.31",
+        "@langchain/langgraph": "^1.2.1",
         "ai": "^6.0.116",
         "dotenv": "^16.4.0",
-        "ethers": "^6.11.0"
+        "ethers": "^6.11.0",
+        "hedera-agent-kit": "^3.8.0",
+        "langchain": "^1.2.30"
     },
     "devDependencies": {
         "@types/node": "^20.11.0",

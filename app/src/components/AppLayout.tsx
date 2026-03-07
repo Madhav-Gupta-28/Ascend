@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { Activity, BarChart3, MessageSquare, Layers, Zap } from "lucide-react";
+import WalletConnectButton from "@/components/WalletConnectButton";
 
 const navItems = [
   { path: "/", label: "Intelligence Board", icon: BarChart3 },
@@ -52,10 +53,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <button className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-all hover:bg-primary/20 glow-primary">
-            <div className="h-2 w-2 rounded-full bg-success animate-pulse-glow" />
-            Connect Wallet
-          </button>
+          <WalletConnectButton />
         </div>
       </header>
 

@@ -20,7 +20,13 @@ const MIRROR_NODE = process.env.HEDERA_MIRROR_NODE || "https://testnet.mirrornod
 interface Deployments {
     network: string;
     operatorId: string;
-    hcs: { ascendRoundsTopicId: string };
+    hcs: {
+        ascendPredictionsTopicId?: string;
+        ascendResultsTopicId?: string;
+        discourseTopicIds?: Record<string, string>;
+        hcs10RegistryTopicId?: string;
+        ascendRoundsTopicId?: string;
+    };
     hts: { ascendTokenId: string };
     contracts: { agentRegistry: string; predictionMarket: string; stakingVault: string };
     createdAt: string;
@@ -48,26 +54,44 @@ async function main() {
     let passed = 0;
     let failed = 0;
 
-    // ── Check 1: HCS Topic ──
+    // ── Check 1: HCS Topics ──
     try {
-        const topicId = deployments.hcs.ascendRoundsTopicId;
-        const topic = await mirrorGet(`/api/v1/topics/${topicId}`);
-        console.log(`✅ HCS Topic: ${topicId}`);
-        console.log(`   Memo: ${topic.memo}`);
-        passed++;
+        const hcsTopics = [
+            ["predictions", deployments.hcs.ascendPredictionsTopicId || deployments.hcs.ascendRoundsTopicId],
+            ["results", deployments.hcs.ascendResultsTopicId],
+            ["hcs10-registry", deployments.hcs.hcs10RegistryTopicId],
+        ] as const;
 
-        // Check for messages
-        const msgs = await mirrorGet(`/api/v1/topics/${topicId}/messages?limit=5&order=desc`);
-        const msgCount = msgs.messages?.length || 0;
-        console.log(`   Messages: ${msgCount} found`);
-        if (msgCount > 0) {
-            const latest = msgs.messages[0];
-            const decoded = Buffer.from(latest.message, "base64").toString("utf-8");
-            console.log(`   Latest message: ${decoded}`);
+        for (const [label, topicId] of hcsTopics) {
+            if (!topicId) {
+                console.log(`⚠️  HCS ${label}: not configured`);
+                continue;
+            }
+            const topic = await mirrorGet(`/api/v1/topics/${topicId}`);
+            console.log(`✅ HCS ${label}: ${topicId}`);
+            console.log(`   Memo: ${topic.memo}`);
+            passed++;
+
+            const msgs = await mirrorGet(`/api/v1/topics/${topicId}/messages?limit=3&order=desc`);
+            const msgCount = msgs.messages?.length || 0;
+            console.log(`   Messages: ${msgCount} found`);
+            if (msgCount > 0) {
+                const latest = msgs.messages[0];
+                const decoded = Buffer.from(latest.message, "base64").toString("utf-8");
+                console.log(`   Latest message: ${decoded}`);
+            }
         }
-        passed++;
+
+        if (deployments.hcs.discourseTopicIds) {
+            for (const [agent, topicId] of Object.entries(deployments.hcs.discourseTopicIds)) {
+                const topic = await mirrorGet(`/api/v1/topics/${topicId}`);
+                console.log(`✅ HCS discourse (${agent}): ${topicId}`);
+                console.log(`   Memo: ${topic.memo}`);
+                passed++;
+            }
+        }
     } catch (e: any) {
-        console.log(`❌ HCS Topic: ${e.message}`);
+        console.log(`❌ HCS Topics: ${e.message}`);
         failed++;
     }
 

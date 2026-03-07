@@ -136,6 +136,47 @@ function readConnectionTopicsFromEnv(): string[] {
   return Array.from(topics);
 }
 
+function readDiscourseTopicsFromEnv(): string[] {
+  const topics = new Set<string>();
+  const rawJson = process.env.ASCEND_DISCOURSE_TOPICS_JSON;
+
+  if (rawJson) {
+    try {
+      const parsed = JSON.parse(rawJson) as Record<string, string>;
+      for (const topicId of Object.values(parsed)) {
+        if (typeof topicId === "string") topics.add(topicId);
+      }
+    } catch {
+      // ignored
+    }
+  }
+
+  const explicitTopics = [
+    process.env.ASCEND_DISCOURSE_SENTINEL_TOPIC_ID,
+    process.env.ASCEND_DISCOURSE_PULSE_TOPIC_ID,
+    process.env.ASCEND_DISCOURSE_MERIDIAN_TOPIC_ID,
+    process.env.ASCEND_DISCOURSE_ORACLE_TOPIC_ID,
+  ];
+  for (const topicId of explicitTopics) {
+    if (typeof topicId === "string") topics.add(topicId);
+  }
+
+  return Array.from(topics).filter((topicId) => /^\d+\.\d+\.\d+$/.test(topicId));
+}
+
+function resolveRoundTopics(): string[] {
+  const topics = new Set<string>();
+  const predictionsTopic =
+    process.env.ASCEND_PREDICTIONS_TOPIC_ID || process.env.ASCEND_ROUNDS_TOPIC_ID;
+  if (predictionsTopic) topics.add(predictionsTopic);
+
+  for (const topicId of readDiscourseTopicsFromEnv()) {
+    topics.add(topicId);
+  }
+
+  return Array.from(topics).filter((topicId) => /^\d+\.\d+\.\d+$/.test(topicId));
+}
+
 function resolveConnectionTopics(): string[] {
   const topics = new Set<string>();
   for (const topic of readConnectionTopicsFromEnv()) topics.add(topic);
@@ -202,30 +243,35 @@ function toHCS10Message(topicId: string, msg: MirrorTopicMessage): DiscourseMess
 
 export async function GET(req: NextRequest) {
   const mirrorNodeBase = process.env.HEDERA_MIRROR_NODE || "https://testnet.mirrornode.hedera.com";
-  const topicId = process.env.ASCEND_ROUNDS_TOPIC_ID;
   const limitRaw = Number(req.nextUrl.searchParams.get("limit") || 80);
   const limit = Math.max(1, Math.min(200, Number.isFinite(limitRaw) ? limitRaw : 80));
+  const roundTopics = resolveRoundTopics();
 
-  if (!topicId) {
+  if (roundTopics.length === 0) {
     return NextResponse.json(
-      { error: "ASCEND_ROUNDS_TOPIC_ID is not configured" },
+      {
+        error:
+          "No configured discourse sources. Set ASCEND_PREDICTIONS_TOPIC_ID and/or ASCEND_DISCOURSE_TOPICS_JSON.",
+      },
       { status: 500 },
     );
   }
 
-  const url = `${mirrorNodeBase}/api/v1/topics/${topicId}/messages?order=desc&limit=${limit}`;
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) {
-    return NextResponse.json(
-      { error: `Mirror node request failed (${response.status})` },
-      { status: 502 },
-    );
-  }
-
-  const payload = await response.json();
-  const roundMessages = ((payload?.messages || []) as MirrorTopicMessage[])
-    .map((msg) => toDiscourseMessage(topicId, msg))
-    .filter((msg): msg is DiscourseMessage => msg !== null);
+  const roundMessages = (
+    await Promise.all(
+      roundTopics.map(async (topicId) => {
+        const url = `${mirrorNodeBase}/api/v1/topics/${topicId}/messages?order=desc&limit=${limit}`;
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok) {
+          return [] as DiscourseMessage[];
+        }
+        const payload = await response.json();
+        return ((payload?.messages || []) as MirrorTopicMessage[])
+          .map((msg) => toDiscourseMessage(topicId, msg))
+          .filter((msg): msg is DiscourseMessage => msg !== null);
+      }),
+    )
+  ).flat();
 
   const connectionTopics = resolveConnectionTopics();
   const hcs10Messages = (

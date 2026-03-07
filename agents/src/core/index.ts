@@ -62,3 +62,10 @@ export {
 
 export { HTSClient, createHTSClient } from "./hts-client.js";
 export type { HtsTokenInfo, RewardRecipient } from "./hts-client.js";
+
+export {
+    HederaAgentKitClient,
+    createHederaAgentKitFromEnv,
+    DEFAULT_HEDERA_AGENT_KIT_TOOLS,
+} from "./hedera-agent-kit.js";
+export type { HederaAgentKitConfig, HederaAgentKitResult } from "./hedera-agent-kit.js";

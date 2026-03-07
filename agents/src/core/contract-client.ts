@@ -86,7 +86,13 @@ export interface CommitmentData {
 export interface Deployments {
     network: string;
     operatorId: string;
-    hcs: { ascendRoundsTopicId: string };
+    hcs: {
+        ascendPredictionsTopicId?: string;
+        ascendResultsTopicId?: string;
+        discourseTopicIds?: Record<string, string>;
+        hcs10RegistryTopicId?: string;
+        ascendRoundsTopicId?: string;
+    };
     hts: { ascendTokenId: string };
     contracts: { agentRegistry: string; predictionMarket: string; stakingVault: string };
     createdAt: string;

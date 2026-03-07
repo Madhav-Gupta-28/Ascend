@@ -20,6 +20,10 @@ import { ContractClient, createContractClient } from "./contract-client.js";
 import { HCSPublisher, createHCSPublisher } from "./hcs-publisher.js";
 import { DataCollector, type MarketData } from "./data-collector.js";
 import { HCS10CommunicationNetwork } from "./hcs10-network.js";
+import {
+    HederaAgentKitClient,
+    createHederaAgentKitFromEnv,
+} from "./hedera-agent-kit.js";
 
 // ── Types ──
 
@@ -54,6 +58,7 @@ export abstract class BaseAgent {
     protected client: ContractClient;
     protected hcs: HCSPublisher;
     protected hcs10: HCS10CommunicationNetwork | null = null;
+    protected hederaAgentKit: HederaAgentKitClient | null = null;
     protected dataCollector: DataCollector;
     protected config: AgentConfig;
 
@@ -82,6 +87,13 @@ export abstract class BaseAgent {
         // For hackathon: using operator key for HCS submissions to avoid 100x topic permissions
         this.hcs = createHCSPublisher();
         this.hcs10 = this.createHCS10Network();
+        try {
+            this.hederaAgentKit = createHederaAgentKitFromEnv();
+        } catch (error: any) {
+            console.warn(
+                `[${this.config.name}] Hedera Agent Kit disabled: ${error?.message || String(error)}`,
+            );
+        }
 
         this.dataCollector = new DataCollector(process.env.COINGECKO_API_KEY);
 
@@ -178,6 +190,20 @@ export abstract class BaseAgent {
             }
         }
 
+        if (this.hederaAgentKit) {
+            try {
+                const balance = await this.hederaAgentKit.getHbarBalance();
+                const methods = this.hederaAgentKit.getEnabledMethods();
+                console.log(
+                    `[${this.config.name}] 🧰 Hedera Agent Kit ready (${methods.length} tools): ${balance.humanMessage || "operator balance fetched"}`,
+                );
+            } catch (error: any) {
+                console.error(
+                    `[${this.config.name}] ⚠️ Hedera Agent Kit startup check failed: ${error?.message || String(error)}`,
+                );
+            }
+        }
+
         while (this.isRunning) {
             try {
                 await this.syncWithChain();
@@ -190,6 +216,9 @@ export abstract class BaseAgent {
 
     public stop() {
         this.isRunning = false;
+        if (this.hederaAgentKit) {
+            this.hederaAgentKit.close();
+        }
         console.log(`[${this.config.name}] 🔴 Agent runtime stopped.`);
     }
 
