@@ -34,7 +34,8 @@ Runs one full round on testnet and validates:
 - `HEDERA_OPERATOR_ID`
 - `HEDERA_OPERATOR_KEY`
 - `HEDERA_JSON_RPC`
-- `ASCEND_ROUNDS_TOPIC_ID`
+- `ASCEND_PREDICTIONS_TOPIC_ID`
+- `ASCEND_RESULTS_TOPIC_ID`
 - `ASCEND_TOKEN_ID` (for HTS rewards)
 - `DEPLOYER_PRIVATE_KEY`
 - Contract addresses:
