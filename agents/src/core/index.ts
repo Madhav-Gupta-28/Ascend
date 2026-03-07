@@ -20,6 +20,8 @@ export type { AgentPrediction, RoundConfig, AgentProfile } from "./round-orchest
 export { BaseAgent } from "./BaseAgent.js";
 export type { AgentConfig, AgentState } from "./BaseAgent.js";
 export { AgentSentinel } from "./AgentSentinel.js";
-export { AgentPulse } from "./AgentPulse.js";
 export { AgentMeridian } from "./AgentMeridian.js";
 export { AgentOracle } from "./AgentOracle.js";
+
+export { LeaderboardService } from "./leaderboard-service.js";
+export type { RankedAgent } from "./leaderboard-service.js";
