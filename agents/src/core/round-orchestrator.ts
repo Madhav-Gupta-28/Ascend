@@ -145,6 +145,7 @@ export class RoundOrchestrator {
             try {
                 await this.contracts.commitPrediction(roundId, pred.agentId, pred.commitHash, config.entryFeeHbar);
                 console.log(`   [${pred.agentName}] Committed: ${pred.commitHash.substring(0, 10)}...`);
+                await this.sleep(2500); // Hedera Hashio nonce/precheck buffer
             } catch (error: any) {
                 console.error(`   [${pred.agentName}] ❌ Commit failed: ${error.message}`);
             }
@@ -185,6 +186,7 @@ export class RoundOrchestrator {
                     pred.salt
                 );
                 console.log(`   [${pred.agentName}] Revealed: ${pred.direction === 0 ? "UP" : "DOWN"} @ ${pred.confidence}%`);
+                await this.sleep(2500); // Hedera Hashio nonce/precheck buffer
             } catch (error: any) {
                 console.error(`   [${pred.agentName}] ❌ Reveal failed: ${error.message}`);
             }

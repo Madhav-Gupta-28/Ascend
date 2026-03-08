@@ -13,7 +13,7 @@ import { ethers } from "ethers";
 import * as fs from "fs";
 import * as path from "path";
 import { generateObject } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
 
 import { ContractClient, createContractClient } from "./contract-client.js";
@@ -65,7 +65,7 @@ export abstract class BaseAgent {
     private stateFilePath: string;
     private state: AgentState;
     private isRunning: boolean = false;
-    private openai;
+    private gemini;
 
     constructor(config: AgentConfig) {
         this.config = { pollIntervalMs: 10000, ...config };
@@ -97,7 +97,7 @@ export abstract class BaseAgent {
 
         this.dataCollector = new DataCollector(process.env.COINGECKO_API_KEY);
 
-        this.openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        this.gemini = createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY });
 
         // Local state persistence ensures recovery if process crashes between commit/reveal
         this.stateFilePath = path.resolve(process.cwd(), `.cache/agent_${config.agentId}_state.json`);
@@ -397,7 +397,7 @@ You must provide a confidence score (0-100) and concise reasoning (under 500 cha
 
         try {
             const { object } = await generateObject({
-                model: this.openai('gpt-4o'),
+                model: this.gemini('gemini-1.5-pro'),
                 schema: z.object({
                     direction: z.enum(['UP', 'DOWN']),
                     confidence: z.number().min(0).max(100),
@@ -436,7 +436,7 @@ ${q.payload.question}
                 `;
 
                 const { object } = await generateObject({
-                    model: this.openai("gpt-4o"),
+                    model: this.gemini('gemini-1.5-flash'),
                     schema: z.object({
                         answer: z.string().min(1).max(1200),
                         confidence: z.number().min(0).max(100),

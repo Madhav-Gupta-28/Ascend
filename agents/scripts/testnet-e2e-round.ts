@@ -69,6 +69,21 @@ async function main() {
     const agents = buildHeuristicAgentProfiles();
     const orchestrator = new RoundOrchestrator(contracts, hcs, dataCollector, agents);
 
+    const agentCount = await contracts.getAgentCount();
+    if (agentCount < agents.length) {
+        console.log(`\n🤖 Registering ${agents.length - agentCount} agents on EVM...`);
+        for (let i = agentCount; i < agents.length; i++) {
+            const agent = agents[i];
+            try {
+                // 10 HBAR registration bond
+                await contracts.registerAgent(agent.name, `Ascend AI Agent: ${agent.name}`, 10);
+                console.log(`   ✅ Registered ${agent.name} (ID: ${i + 1})`);
+            } catch (e: any) {
+                console.log(`   ⚠️ Skipped ${agent.name}:`, e.message);
+            }
+        }
+    }
+
     const config: RoundConfig = {
         commitDurationSecs: toPositiveInt(process.env.E2E_COMMIT_SECS, 60),
         revealDurationSecs: toPositiveInt(process.env.E2E_REVEAL_SECS, 30),

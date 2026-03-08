@@ -16,18 +16,22 @@ contract DeployAscend is Script {
         // 1. Deploy AgentRegistry
         AgentRegistry registry = new AgentRegistry();
         console.log("AgentRegistry deployed at:", address(registry));
+        vm.sleep(3000);
 
         // 2. Deploy PredictionMarket
         PredictionMarket market = new PredictionMarket(address(registry));
         console.log("PredictionMarket deployed at:", address(market));
+        vm.sleep(3000);
 
         // 3. Deploy StakingVault
         StakingVault vault = new StakingVault(address(registry));
         console.log("StakingVault deployed at:", address(vault));
+        vm.sleep(3000);
 
         // 4. Authorize PredictionMarket to call updateScore on AgentRegistry
         registry.setAuthorizedCaller(address(market), true);
         console.log("PredictionMarket authorized on AgentRegistry");
+        vm.sleep(3000);
 
         // 5. Authorize StakingVault to call updateTotalStaked on AgentRegistry
         registry.setAuthorizedCaller(address(vault), true);

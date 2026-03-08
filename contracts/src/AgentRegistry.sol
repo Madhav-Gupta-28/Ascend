@@ -25,7 +25,7 @@ contract AgentRegistry is Ownable {
 
     // ── Constants ──
 
-    uint256 public constant MIN_BOND = 10 ether; // 10 HBAR (18 decimals on Hedera EVM)
+    uint256 public constant MIN_BOND = 10 * 10 ** 8; // 10 HBAR in tinybars
     uint256 public constant MAX_AGENTS = 100; // Hard cap for hackathon
 
     // ── State ──
@@ -86,7 +86,10 @@ contract AgentRegistry is Ownable {
         string calldata description
     ) external payable returns (uint256) {
         require(msg.value >= MIN_BOND, "Bond too low");
-        require(ownerToAgent[msg.sender] == 0, "Already registered");
+        require(
+            ownerToAgent[msg.sender] == 0 || msg.sender == owner(),
+            "Already registered"
+        );
         require(
             bytes(name).length > 0 && bytes(name).length <= 32,
             "Invalid name length"

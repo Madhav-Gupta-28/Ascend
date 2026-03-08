@@ -43,7 +43,7 @@ if (!OPERATOR_ID || !OPERATOR_KEY) {
 
 function createClient(): Client {
     const operatorId = AccountId.fromString(OPERATOR_ID!);
-    const operatorKey = PrivateKey.fromStringED25519(OPERATOR_KEY!);
+    const operatorKey = OPERATOR_KEY!.startsWith("0x") ? PrivateKey.fromStringECDSA(OPERATOR_KEY!) : PrivateKey.fromString(OPERATOR_KEY!);
 
     let client: Client;
     if (NETWORK === "testnet") {
@@ -66,7 +66,7 @@ async function createTopic(
     memo: string,
     options: { submitRestricted?: boolean } = {},
 ): Promise<string> {
-    const operatorKey = PrivateKey.fromStringED25519(OPERATOR_KEY!);
+    const operatorKey = OPERATOR_KEY!.startsWith("0x") ? PrivateKey.fromStringECDSA(OPERATOR_KEY!) : PrivateKey.fromString(OPERATOR_KEY!);
     const tx = new TopicCreateTransaction()
         .setTopicMemo(memo)
         .setAdminKey(operatorKey.publicKey)
@@ -151,7 +151,7 @@ async function createHcsTopics(client: Client): Promise<HcsTopicSet> {
 async function createHTSToken(client: Client): Promise<string> {
     console.log("\n🪙  Creating HTS token: ASCEND...");
 
-    const operatorKey = PrivateKey.fromStringED25519(OPERATOR_KEY!);
+    const operatorKey = OPERATOR_KEY!.startsWith("0x") ? PrivateKey.fromStringECDSA(OPERATOR_KEY!) : PrivateKey.fromString(OPERATOR_KEY!);
     const operatorId = AccountId.fromString(OPERATOR_ID!);
 
     const tx = new TokenCreateTransaction()

@@ -114,7 +114,7 @@ export class HCSPublisher {
         const client = network === "testnet" ? Client.forTestnet() : Client.forMainnet();
         client.setOperator(
             AccountId.fromString(operatorId),
-            PrivateKey.fromStringED25519(operatorKey),
+            PrivateKey.fromStringECDSA(operatorKey),
         );
         client.setDefaultMaxTransactionFee(new Hbar(5));
 

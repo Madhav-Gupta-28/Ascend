@@ -1,0 +1,25 @@
+{
+  "network": "testnet",
+  "operatorId": "0.0.8127508",
+  "hcs": {
+    "ascendPredictionsTopicId": "0.0.8128462",
+    "ascendResultsTopicId": "0.0.8128463",
+    "discourseTopicIds": {
+      "sentinel": "0.0.8128464",
+      "pulse": "0.0.8128465",
+      "meridian": "0.0.8128466",
+      "oracle": "0.0.8128467"
+    },
+    "hcs10RegistryTopicId": "0.0.8128468",
+    "ascendRoundsTopicId": "0.0.8128462"
+  },
+  "hts": {
+    "ascendTokenId": "0.0.8128470"
+  },
+  "contracts": {
+    "agentRegistry": "0x6444300d3b8b1647a349b2Be46dA6b48420773B9",
+    "predictionMarket": "0x5Db843c8eF34b8aFE72341574dE1B4165feDD045",
+    "stakingVault": "0x1b61A513dc79B9ee481E8217652Bcec486269c48"
+  },
+  "createdAt": "2026-03-08T17:34:51.496Z"
+}

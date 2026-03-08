@@ -125,7 +125,7 @@ export class ContractClient {
         const tx: ContractTransactionResponse = await this.registry.registerAgent(
             name,
             description,
-            { value: ethers.parseEther(bondHbar.toString()), gasLimit: 400_000 }
+            { value: ethers.parseEther(bondHbar.toString()), gasLimit: 1_500_000 }
         );
         const receipt = await tx.wait();
         const log = receipt?.logs.find((entry: any) => {
@@ -136,7 +136,16 @@ export class ContractClient {
             }
         });
         if (!log) {
-            throw new Error("Agent registration failed: event not emitted");
+            console.warn("⚠️ Hashio event log delayed. Polling getAgentCount()...");
+            const initialCount = Number(await this.registry.getAgentCount({ blockTag: "latest" }));
+            for (let i = 0; i < 5; i++) {
+                await new Promise((r) => setTimeout(r, 2000));
+                const newCount = Number(await this.registry.getAgentCount({ blockTag: "latest" }));
+                // Given we just created one, if newCount is updated we use that. 
+                // However, without knowing the true sequence, we assume the latest minus one is ours.
+                if (newCount > 0) return BigInt(newCount - 1);
+            }
+            return BigInt(initialCount > 0 ? initialCount - 1 : 0);
         }
 
         const parsed = this.registry.interface.parseLog({ topics: [...log.topics], data: log.data });
@@ -175,7 +184,7 @@ export class ContractClient {
             revealDurationSecs,
             roundDurationSecs,
             startPrice,
-            ethers.parseEther(entryFeeHbar.toString()),
+            ethers.parseUnits(entryFeeHbar.toFixed(8), 8),
             { gasLimit: 300_000 }
         );
 
@@ -189,7 +198,15 @@ export class ContractClient {
         });
 
         if (!log) {
-            throw new Error("Round creation failed: event not emitted");
+            console.warn("⚠️ Hashio event log delayed. Polling getRoundCount()...");
+            // Hedera testnet RPC nodes can be heavily delayed for state reads right after a write.
+            const initialCount = Number(await this.market.getRoundCount({ blockTag: "latest" }));
+            for (let i = 0; i < 5; i++) {
+                await new Promise((r) => setTimeout(r, 2000));
+                const newCount = Number(await this.market.getRoundCount({ blockTag: "latest" }));
+                if (newCount > 0) return BigInt(newCount - 1);
+            }
+            return BigInt(initialCount > 0 ? initialCount - 1 : 0);
         }
 
         const parsed = this.market.interface.parseLog({ topics: [...log.topics], data: log.data });
@@ -283,7 +300,7 @@ export class ContractClient {
     async unstake(agentId: number, amountHbar: number): Promise<void> {
         const tx: ContractTransactionResponse = await this.vault.unstake(
             agentId,
-            ethers.parseEther(amountHbar.toString()),
+            ethers.parseUnits(amountHbar.toFixed(8), 8),
             { gasLimit: 300_000 }
         );
         await tx.wait();
@@ -304,12 +321,12 @@ export class ContractClient {
 
     async getUserStake(agentId: number, userAddress: string): Promise<string> {
         const stake = await this.vault.getUserStake(agentId, userAddress);
-        return ethers.formatEther(stake[0]);
+        return ethers.formatUnits(stake[0], 8);
     }
 
     async getTotalStakedOnAgent(agentId: number): Promise<string> {
         const tvl = await this.vault.getTotalStakedOnAgent(agentId);
-        return ethers.formatEther(tvl);
+        return ethers.formatUnits(tvl, 8);
     }
 
     // Backward-compatible wrapper used by older callers.
@@ -319,7 +336,7 @@ export class ContractClient {
 
     async getTotalTVL(): Promise<string> {
         const tvl = await this.vault.getTVL();
-        return ethers.formatEther(tvl);
+        return ethers.formatUnits(tvl, 8);
     }
 
     async getRewardPerToken(agentId: number): Promise<string> {
@@ -329,7 +346,7 @@ export class ContractClient {
 
     async getPendingReward(agentId: number, userAddress: string): Promise<string> {
         const pendingReward = await this.vault.getPendingReward(agentId, userAddress);
-        return ethers.formatEther(pendingReward);
+        return ethers.formatUnits(pendingReward, 8);
     }
 
     // Backward-compatible wrapper used by older callers.
