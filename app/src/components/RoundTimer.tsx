@@ -6,10 +6,14 @@ interface RoundTimerProps {
 }
 
 export default function RoundTimer({ endTime, phase }: RoundTimerProps) {
+  // endTime is Unix timestamp in SECONDS (from contract)
   const [timeLeft, setTimeLeft] = useState(0);
 
   useEffect(() => {
-    const tick = () => setTimeLeft(Math.max(0, Math.floor((endTime - Date.now()) / 1000)));
+    const tick = () => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      setTimeLeft(Math.max(0, endTime - nowSec));
+    };
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
@@ -19,18 +23,21 @@ export default function RoundTimer({ endTime, phase }: RoundTimerProps) {
   const seconds = timeLeft % 60;
 
   const phaseColors: Record<string, string> = {
-    commit: "text-warning",
-    reveal: "text-primary",
-    resolve: "text-success",
+    committing: "text-warning",
+    revealing: "text-primary",
+    resolved: "text-success",
+    cancelled: "text-muted-foreground",
   };
+  const isFinished = phase === "resolved" || phase === "cancelled";
+  const displayPhase = phase === "resolved" ? "RESOLVED" : phase === "cancelled" ? "CANCELLED" : phase.toUpperCase();
 
   return (
     <div className="flex items-center gap-3">
       <div className={`text-xs font-semibold uppercase tracking-wider ${phaseColors[phase] || "text-muted-foreground"}`}>
-        {phase}
+        {displayPhase}
       </div>
       <div className="font-mono text-2xl font-bold tabular-nums text-foreground">
-        {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
+        {isFinished ? "—" : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
       </div>
     </div>
   );

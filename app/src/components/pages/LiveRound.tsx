@@ -3,6 +3,7 @@ import { useCurrentRound, useCommitments } from "@/hooks/useRounds";
 import { useAgents } from "@/hooks/useAgents";
 import { usePredictionsFeed } from "@/hooks/useHCSMessages";
 import RoundTimer from "@/components/RoundTimer";
+import IntelligenceTimeline from "@/components/IntelligenceTimeline";
 import { ArrowUp, ArrowDown, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
@@ -13,7 +14,7 @@ export default function LiveRound() {
 
   // Fetch real on-chain commitments for all registered agents for the current round
   const agentIds = agents.map(a => Number(a.id));
-  const { data: commitments = {} } = useCommitments(round?.id || 0, agentIds);
+  const { data: commitments = {} } = useCommitments(round?.id || 0, agentIds, round?.status);
 
   // Fetch HCS feed for reasoning
   const { data: feed = [] } = usePredictionsFeed(100);
@@ -33,6 +34,27 @@ export default function LiveRound() {
   const currentPriceDisplay = round?.endPrice && round?.endPrice > 0 ? round.endPrice : round?.startPrice;
   const priceChangePercent = round?.startPrice ? ((priceChange / round.startPrice) * 100).toFixed(2) : "0.00";
   const isPositive = priceChange >= 0;
+
+  // Effective phase and timer: if commit deadline passed but status still Committing, show Revealing and count down to reveal
+  const nowSec = typeof round !== "undefined" ? Math.floor(Date.now() / 1000) : 0;
+  const effectivePhase =
+    round?.status === 2
+      ? "resolved"
+      : round?.status === 3
+        ? "cancelled"
+        : round?.status === 0 && nowSec > (round?.commitDeadline ?? 0)
+          ? "revealing"
+          : round?.status === 1 && nowSec > (round?.revealDeadline ?? 0)
+            ? "revealing"
+            : round?.status === 0
+              ? "committing"
+              : "revealing";
+  const effectiveEndTime =
+    effectivePhase === "resolved" || effectivePhase === "cancelled"
+      ? (round?.resolveAfter ?? 0)
+      : effectivePhase === "committing"
+        ? (round?.commitDeadline ?? 0)
+        : (round?.revealDeadline ?? 0);
 
   // Filter HCS reasoning for the current round specifically
   const roundFeed = useMemo(() => {
@@ -91,8 +113,8 @@ export default function LiveRound() {
             </div>
           </div>
           <RoundTimer
-            endTime={round.status === 0 ? round.commitDeadline : round.status === 1 ? round.revealDeadline : round.resolveAfter}
-            phase={round.status === 0 ? "committing" : round.status === 1 ? "revealing" : round.status === 2 ? "resolved" : "cancelled"}
+            endTime={effectiveEndTime}
+            phase={effectivePhase}
           />
         </div>
       </motion.div>
@@ -129,8 +151,10 @@ export default function LiveRound() {
             const directoryMetadata = getAgentDirectoryEntry(agent.name);
             const avatar = directoryMetadata?.avatar || "🤖";
 
-            // Map direction integers to strings
-            const directionStr = commitment?.direction === 1 ? "UP" : commitment?.direction === 0 ? "DOWN" : null;
+            // Contract: Direction.UP = 0, Direction.DOWN = 1
+            const directionStr = commitment?.revealed
+                ? (Number(commitment.direction) === 0 ? "UP" : Number(commitment.direction) === 1 ? "DOWN" : null)
+                : null;
             const isRevealedDataVisible = showRevealed && commitment?.revealed;
 
             return (
@@ -153,6 +177,9 @@ export default function LiveRound() {
                   </div>
                   {commitment?.committed && !commitment?.revealed && (
                     <span className="text-[10px] font-mono text-primary animate-pulse tracking-wider">COMMITTED</span>
+                  )}
+                  {round.status === 0 && (!commitment || !commitment.committed) && (
+                    <span className="text-[10px] font-mono text-muted-foreground tracking-wider">Waiting…</span>
                   )}
                 </div>
 
@@ -180,6 +207,25 @@ export default function LiveRound() {
             );
           })}
         </div>
+      </motion.div>
+
+      {/* Round-scoped Intelligence Timeline — same beautiful feed */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.35 }}
+        className="rounded-2xl border border-primary/15 bg-gradient-to-b from-card to-card/95 p-6 shadow-sm"
+      >
+        <div className="mb-4">
+          <p className="text-sm font-medium text-foreground/90">
+            Commit and reveal events for this round — verified on Hedera.
+          </p>
+        </div>
+        <IntelligenceTimeline
+          limit={50}
+          filters={{ roundId: round.id }}
+          title={`Round #${round.id} — Timeline`}
+        />
       </motion.div>
 
       {/* Agent reasoning feed */}

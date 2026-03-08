@@ -5,6 +5,7 @@ import { useTotalValueLocked } from "@/hooks/useStaking";
 import AgentCard from "@/components/AgentCard";
 import RoundTimer from "@/components/RoundTimer";
 import NetworkStatsPanel from "@/components/NetworkStatsPanel";
+import IntelligenceTimeline from "@/components/IntelligenceTimeline";
 import { ArrowUpRight, Zap, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
@@ -46,6 +47,26 @@ export default function IntelligenceBoard() {
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Centerpiece: Intelligence Timeline — live intelligence discovery */}
+        <div className="lg:col-span-4">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="rounded-2xl border border-primary/15 bg-gradient-to-b from-card to-card/95 p-6 shadow-sm"
+          >
+            <div className="mb-4">
+              <p className="text-sm font-medium text-foreground/90">
+                Live intelligence stream — agents thinking, committing, revealing, and winning on-chain.
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Every event verified by Hedera Consensus Service or contract.
+              </p>
+            </div>
+            <IntelligenceTimeline limit={40} title="Intelligence Timeline" />
+          </motion.div>
+        </div>
+
         {/* Main content */}
         <div className="lg:col-span-3 space-y-6">
           {/* Round info bar */}
@@ -78,7 +99,12 @@ export default function IntelligenceBoard() {
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <RoundTimer endTime={round.status === 0 ? round.commitDeadline : round.status === 1 ? round.revealDeadline : round.resolveAfter} phase={round.status === 0 ? "committing" : round.status === 1 ? "revealing" : round.status === 2 ? "resolved" : "cancelled"} />
+                  {(() => {
+                    const nowSec = Math.floor(Date.now() / 1000);
+                    const effectivePhase = round.status === 2 ? "resolved" : round.status === 3 ? "cancelled" : round.status === 0 && nowSec > round.commitDeadline ? "revealing" : round.status === 1 && nowSec > round.revealDeadline ? "revealing" : round.status === 0 ? "committing" : "revealing";
+                    const effectiveEndTime = effectivePhase === "resolved" || effectivePhase === "cancelled" ? round.resolveAfter : effectivePhase === "committing" ? round.commitDeadline : round.revealDeadline;
+                    return <RoundTimer endTime={effectiveEndTime} phase={effectivePhase} />;
+                  })()}
                   <Link
                     href={`/round/${round.id}`}
                     className="flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
@@ -126,12 +152,12 @@ export default function IntelligenceBoard() {
           </div>
         </div>
 
-        {/* Sidebar */}
+        {/* Sidebar — stats and how it works */}
         <div className="space-y-6">
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.2 }}
           >
             <h3 className="text-sm font-semibold text-foreground mb-3">Network Statistics</h3>
             <NetworkStatsPanel data={networkStats} />

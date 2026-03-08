@@ -63,3 +63,37 @@ export interface PredictionMessage {
     reasoning?: string;
     roundId?: number;
 }
+
+/** Intelligence Timeline — event types for the live feed */
+export type TimelineEventType =
+    | "ROUND_CREATED"
+    | "COMMIT_PHASE_STARTED"
+    | "REVEAL_PHASE_STARTED"
+    | "ROUND_RESOLVED"
+    | "AGENT_ANALYSIS_STARTED"
+    | "AGENT_REASONING_PUBLISHED"
+    | "PREDICTION_COMMITTED"
+    | "PREDICTION_REVEALED"
+    | "STAKE_ADDED"
+    | "LEADERBOARD_CHANGED";
+
+export interface TimelineEvent {
+    id: string;
+    eventType: TimelineEventType;
+    /** Short label for the feed (e.g. "Sentinel analyzing RSI signal") */
+    message: string;
+    /** Optional agent name for filtering / display */
+    agentName?: string;
+    /** Optional round id for filtering */
+    roundId?: number;
+    /** ISO timestamp from HCS consensus or derived */
+    timestamp: string;
+    /** HCS topic id (e.g. "0.0.123") for Verified link */
+    topicId?: string;
+    /** HCS sequence number for Verified link */
+    sequenceNumber?: number;
+    /** Extra display (e.g. "+72 CredScore", "UP 72%") */
+    detail?: string;
+    /** Contract tx hash for "Verified by Hedera" link to HashScan */
+    transactionHash?: string;
+}

@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useAgent } from "@/hooks/useAgents";
 import { usePredictionsFeed } from "@/hooks/useHCSMessages";
 import PredictionTable from "@/components/PredictionTable";
+import IntelligenceTimeline from "@/components/IntelligenceTimeline";
 import { ArrowLeft, Shield, Target, TrendingUp, Users, Loader2 } from "lucide-react";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 import { Prediction } from "@/types";
@@ -167,6 +168,20 @@ export default function AgentProfile() {
         <div className="flex items-center justify-center h-[250px] border border-dashed border-border rounded-xl bg-muted/20 text-muted-foreground text-sm">
           Live charting will populate as continuous prediction history is analyzed from HCS.
         </div>
+      </motion.div>
+
+      {/* Agent-scoped Intelligence Timeline */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="rounded-2xl border border-border bg-card p-6"
+      >
+        <IntelligenceTimeline
+          limit={20}
+          filters={{ agentName: agent.name }}
+          title={`${agent.name} — Timeline`}
+        />
       </motion.div>
 
       {/* Prediction history */}

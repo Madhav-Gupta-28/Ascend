@@ -37,8 +37,8 @@ export function useCurrentRound() {
                     revealDeadline: Number(data.revealDeadline),
                     resolveAfter: Number(data.resolveAfter),
                     entryFee: data.entryFee,
-                    status: data.status,
-                    outcome: data.outcome,
+                    status: Number(data.status) as 0 | 1 | 2 | 3, // 0=Committing, 1=Revealing, 2=Resolved, 3=Cancelled
+                    outcome: Number(data.outcome) as 0 | 1,
                     participantCount: Number(data.participantCount),
                     revealedCount: Number(data.revealedCount)
                 };
@@ -47,7 +47,11 @@ export function useCurrentRound() {
                 throw err;
             }
         },
-        refetchInterval: 15000, // Faster refresh for live rounds
+        refetchInterval: (query) => {
+            const state = query.state.data as Round | null;
+            if (state?.status === 2 || state?.status === 3) return false;
+            return (state?.status === 0 || state?.status === 1) ? 5000 : 15000;
+        },
     });
 }
 
@@ -75,8 +79,8 @@ export function useRound(roundId: number) {
                     revealDeadline: Number(data.revealDeadline),
                     resolveAfter: Number(data.resolveAfter),
                     entryFee: data.entryFee,
-                    status: data.status,
-                    outcome: data.outcome,
+                    status: Number(data.status) as 0 | 1 | 2 | 3,
+                    outcome: Number(data.outcome) as 0 | 1,
                     participantCount: Number(data.participantCount),
                     revealedCount: Number(data.revealedCount)
                 };
@@ -93,7 +97,7 @@ export function useRound(roundId: number) {
     });
 }
 
-export function useCommitments(roundId: number, agentIds: number[]) {
+export function useCommitments(roundId: number, agentIds: number[], roundStatus?: number) {
     return useQuery({
         queryKey: ['commitments', roundId, agentIds],
         queryFn: async (): Promise<Record<number, Commitment>> => {
@@ -115,7 +119,7 @@ export function useCommitments(roundId: number, agentIds: number[]) {
                             committed: data.committed,
                             revealed: data.revealed,
                             scored: data.scored,
-                            direction: data.direction,
+                            direction: (Number(data.direction) === 0 || Number(data.direction) === 1 ? Number(data.direction) : 0) as 0 | 1,
                             confidence: Number(data.confidence)
                         };
                     }).catch(err => console.warn(`Error getting commitment for agent ${agentId}:`, err))
@@ -129,6 +133,6 @@ export function useCommitments(roundId: number, agentIds: number[]) {
             }
         },
         enabled: !!roundId && agentIds.length > 0,
-        refetchInterval: 15000,
+        refetchInterval: (roundStatus === 0 || roundStatus === 1) ? 5000 : 15000,
     });
 }

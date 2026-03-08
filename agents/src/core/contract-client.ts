@@ -214,11 +214,13 @@ export class ContractClient {
     }
 
     async commitPrediction(roundId: number, agentId: number, commitHash: string, entryFeeHbar: number = 0): Promise<void> {
+        // Hedera native value is 8 decimals (tinybars)
+        const value = entryFeeHbar === 0 ? 0n : ethers.parseUnits(entryFeeHbar.toFixed(8), 8);
         const tx: ContractTransactionResponse = await this.market.commitPrediction(
             roundId,
             agentId,
-            commitHash,
-            { value: ethers.parseEther(entryFeeHbar.toString()), gasLimit: 300_000 }
+            commitHash as `0x${string}`,
+            { value, gasLimit: 300_000 }
         );
         await tx.wait();
     }
@@ -229,7 +231,7 @@ export class ContractClient {
             agentId,
             direction,
             confidence,
-            salt,
+            salt as `0x${string}`,
             { gasLimit: 300_000 }
         );
         await tx.wait();
@@ -371,16 +373,30 @@ export class ContractClient {
 
 export function loadDeployments(): Deployments {
     const candidates = [
+        path.resolve(process.cwd(), "../contracts/deployments.json"),
         path.resolve(process.cwd(), "../deployments.json"),
         path.resolve(process.cwd(), "deployments.json"),
     ];
 
     const deploymentsPath = candidates.find((candidate) => fs.existsSync(candidate));
     if (!deploymentsPath) {
-        throw new Error("deployments.json not found. Run setup-hedera.ts and contract deployment first.");
+        throw new Error("deployments.json not found. Run deploy and seed first.");
     }
 
-    return JSON.parse(fs.readFileSync(deploymentsPath, "utf-8"));
+    const raw = JSON.parse(fs.readFileSync(deploymentsPath, "utf-8"));
+    const contracts = raw.contracts ?? raw;
+    return {
+        network: raw.network ?? "testnet",
+        operatorId: raw.operatorId ?? "",
+        hcs: raw.hcs ?? {},
+        hts: raw.hts ?? { ascendTokenId: "" },
+        contracts: {
+            agentRegistry: contracts.agentRegistry ?? "",
+            predictionMarket: contracts.predictionMarket ?? "",
+            stakingVault: contracts.stakingVault ?? "",
+        },
+        createdAt: raw.createdAt ?? new Date().toISOString(),
+    };
 }
 
 export function createContractClient(): ContractClient {

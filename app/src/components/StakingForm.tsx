@@ -42,7 +42,7 @@ export default function StakingForm({ agentId, onClose }: StakingFormProps) {
       const receipt = await executeContractFunction(
         CONTRACT_ADDRESSES.stakingVault,
         STAKING_VAULT_ABI,
-        "stakeOnAgent",
+        "stake",
         [selectedAgent],
         amountInTinybars
       );

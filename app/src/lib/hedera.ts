@@ -61,6 +61,17 @@ export async function fetchTopicMessages(topicId: string, limit = 100, order = '
 }
 
 /**
+ * Convert HCS consensus timestamp (e.g. "1234567890.123456789") to ISO string
+ */
+export function consensusTimestampToIso(consensusTs: string): string {
+    const [secondsRaw, nanosRaw = "0"] = consensusTs.split(".");
+    const seconds = Number(secondsRaw);
+    const nanos = Number(nanosRaw.padEnd(9, "0").slice(0, 9));
+    const ms = seconds * 1000 + Math.floor(nanos / 1_000_000);
+    return new Date(ms).toISOString();
+}
+
+/**
  * Utility to decode Base64 HCS message payloads and parse as JSON
  */
 export function decodeBase64Json<T>(base64String: string): T | null {
