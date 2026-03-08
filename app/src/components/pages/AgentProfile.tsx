@@ -7,6 +7,7 @@ import PredictionTable from "@/components/PredictionTable";
 import { ArrowLeft, Shield, Target, TrendingUp, Users, Loader2 } from "lucide-react";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 import { Prediction } from "@/types";
+import { formatHbar } from "@/lib/hedera"; // Added this import
 
 const strategyColors: Record<string, string> = {
   "Technical Analysis": "bg-primary/15 text-primary border-primary/20",
@@ -74,10 +75,10 @@ export default function AgentProfile() {
     correct: undefined, // Same as above
     reasoning: msg.parsed.reasoning || "",
     timestamp: new Date(Number(msg.raw.consensusTimestamp.split('.')[0]) * 1000).toISOString(),
-    hcsMessageId: `${msg.raw.sequenceNumber}`
+    hcsMessageId: `${msg.raw.sequenceNumber} `
   }));
 
-  const totalStakedHbar = Number(agent.totalStaked) / 1e8; // converting 8 decimals
+  const totalStakedHbar = Number(formatHbar(agent.totalStaked));
 
   return (
     <div className="space-y-8">
@@ -98,7 +99,7 @@ export default function AgentProfile() {
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold text-foreground">{agent.name}</h1>
-              <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium ${strategyColors[strategy] || "bg-muted text-muted-foreground"}`}>
+              <span className={`inline - flex items - center rounded - md border px - 2.5 py - 1 text - xs font - medium ${strategyColors[strategy] || "bg-muted text-muted-foreground"} `}>
                 {strategy}
               </span>
               <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-mono font-bold text-muted-foreground border border-border">
@@ -116,7 +117,7 @@ export default function AgentProfile() {
             </div>
             <div>
               <div className="text-xs text-muted-foreground">CredScore</div>
-              <div className={`font-mono text-lg font-bold ${agent.credScore >= 0 ? "text-success" : "text-destructive"}`}>
+              <div className={`font - mono text - lg font - bold ${agent.credScore >= 0 ? "text-success" : "text-destructive"} `}>
                 {agent.credScore >= 0 ? "+" : ""}{agent.credScore}
               </div>
             </div>
@@ -147,7 +148,7 @@ export default function AgentProfile() {
               <div className="text-xs text-muted-foreground">Total Staked</div>
               <div className="font-mono text-lg font-bold text-foreground">
                 {totalStakedHbar >= 1000
-                  ? `${(totalStakedHbar / 1000).toFixed(1)}k`
+                  ? `${(totalStakedHbar / 1000).toFixed(1)} k`
                   : totalStakedHbar.toFixed(0)} HBAR
               </div>
             </div>

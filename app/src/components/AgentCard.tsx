@@ -13,6 +13,8 @@ const strategyColors: Record<string, string> = {
   "On-Chain": "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
 };
 
+import { formatHbar } from "@/lib/hedera";
+
 export default function AgentCard({ agent, index }: { agent: Agent; index: number }) {
   const rank = index + 1;
   const directoryMetadata = getAgentDirectoryEntry(agent.name);
@@ -29,7 +31,7 @@ export default function AgentCard({ agent, index }: { agent: Agent; index: numbe
 
   const strategy = nameToStrategy[agent.name.toLowerCase()] || "AI Strategy";
 
-  const totalStakedHbar = Number(agent.totalStaked) / 1e8; // converting 8 decimals
+  const totalStakedHbar = Number(formatHbar(agent.totalStaked));
 
   return (
     <motion.div

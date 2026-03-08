@@ -10,6 +10,15 @@ import { ethers } from "ethers";
 // Fallback to testnet if not specified
 export const HEDERA_NETWORK = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
 
+// ── Utility Functions (HBAR / Tinybar) ──
+export function formatHbar(tinybars: bigint | string | number): string {
+    return ethers.formatUnits(tinybars, 8);
+}
+
+export function parseHbar(hbarAmount: string): bigint {
+    return ethers.parseUnits(hbarAmount, 8);
+}
+
 // ── JSON-RPC (EVM Smart Contracts) ──
 
 export const HASHIO_RPC_URL = process.env.NEXT_PUBLIC_HEDERA_JSON_RPC || `https://${HEDERA_NETWORK}.hashio.io/api`;

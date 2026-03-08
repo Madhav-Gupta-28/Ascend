@@ -10,7 +10,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { LedgerId, type Transaction } from "@hashgraph/sdk";
+import { LedgerId, type Transaction, ContractExecuteTransaction, ContractId, Hbar } from "@hashgraph/sdk";
+import { ethers } from "ethers";
 
 type HashConnectLike = {
   connectionStatusChangeEvent: { on: (cb: (status: string) => void) => void };
@@ -43,6 +44,14 @@ interface HederaWalletContextValue {
   setSelectedAccountId: (accountId: string) => void;
   sendTransaction: (transaction: Transaction, accountIdOverride?: string) => Promise<unknown>;
   signMessage: (message: string, accountIdOverride?: string) => Promise<string>;
+  isConnected: boolean;
+  executeContractFunction: (
+    contractAddress: string,
+    abi: any,
+    functionName: string,
+    args: any[],
+    payableAmountTinybars?: string
+  ) => Promise<unknown>;
 }
 
 const HederaWalletContext = createContext<HederaWalletContextValue | null>(null);
@@ -75,7 +84,12 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
     let mounted = true;
 
     async function init() {
-      const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+      const rawProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim();
+      const projectId =
+        rawProjectId && !/^wc_project_id_here$|^your_project_id$|^<.*>$/.test(rawProjectId)
+          ? rawProjectId
+          : undefined;
+
       const network =
         (process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet").toLowerCase() === "mainnet"
           ? "mainnet"
@@ -83,7 +97,9 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
 
       if (!projectId) {
         if (mounted) {
-          setError("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set");
+          setError(
+            "WalletConnect Project ID missing or placeholder. Get a free ID at https://cloud.walletconnect.com (or dashboard.reown.com) and set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID in .env"
+          );
           setIsInitializing(false);
         }
         return;
@@ -138,8 +154,17 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
           setSelectedAccountId((current) => current || connected[0] || null);
         }
       } catch (err: any) {
-        if (mounted) {
-          setError(err?.message || "HashPack initialization failed");
+        if (!mounted) return;
+        const msg = err?.message ?? String(err);
+        if (
+          /cannot redefine property:\s*ethereum/i.test(msg) ||
+          /defineProperty.*ethereum/i.test(msg)
+        ) {
+          setError(
+            "Wallet conflict: another extension (e.g. MetaMask) has already set up the wallet. Try disabling other wallet extensions for this site or use a separate browser profile, then reload."
+          );
+        } else {
+          setError(msg || "HashPack initialization failed");
         }
       } finally {
         if (mounted) {
@@ -207,6 +232,36 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
     [selectedAccountId],
   );
 
+  const executeContractFunction = useCallback(
+    async (
+      contractAddress: string,
+      abi: any,
+      functionName: string,
+      args: any[],
+      payableAmountTinybars?: string
+    ) => {
+      const iface = new ethers.Interface(abi);
+      const data = iface.encodeFunctionData(functionName, args);
+      const functionParameters = Buffer.from(data.replace('0x', ''), 'hex');
+
+      const contractId = ContractId.fromEvmAddress(0, 0, contractAddress);
+
+      let tx = new ContractExecuteTransaction()
+        .setContractId(contractId)
+        .setGas(500000)
+        .setFunctionParameters(functionParameters);
+
+      if (payableAmountTinybars) {
+        tx = tx.setPayableAmount(Hbar.fromTinybars(payableAmountTinybars));
+      }
+
+      return sendTransaction(tx);
+    },
+    [sendTransaction]
+  );
+
+  const isConnected = !!selectedAccountId;
+
   const value = useMemo<HederaWalletContextValue>(
     () => ({
       isInitializing,
@@ -220,6 +275,8 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
       setSelectedAccountId,
       sendTransaction,
       signMessage,
+      isConnected,
+      executeContractFunction,
     }),
     [
       accountIds,
@@ -232,6 +289,8 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
       selectedAccountId,
       sendTransaction,
       signMessage,
+      isConnected,
+      executeContractFunction,
     ],
   );
 

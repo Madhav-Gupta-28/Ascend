@@ -351,6 +351,10 @@ body {
   visibility: hidden;
 }
 
+.static {
+  position: static;
+}
+
 .fixed {
   position: fixed;
 }
@@ -579,6 +583,10 @@ body {
   margin-left: auto;
 }
 
+.mr-1 {
+  margin-right: .25rem;
+}
+
 .mr-2 {
   margin-right: .5rem;
 }
@@ -617,6 +625,10 @@ body {
 
 .block {
   display: block;
+}
+
+.inline {
+  display: inline;
 }
 
 .flex {
@@ -718,6 +730,10 @@ body {
 
 .h-\[1px\] {
   height: 1px;
+}
+
+.h-\[250px\] {
+  height: 250px;
 }
 
 .h-\[var\(--radix-navigation-menu-viewport-height\)\] {
@@ -834,6 +850,10 @@ body {
 
 .w-5 {
   width: 1.25rem;
+}
+
+.w-6 {
+  width: 1.5rem;
 }
 
 .w-64 {
@@ -1004,6 +1024,16 @@ body {
 
 .animate-pulse {
   animation: 2s cubic-bezier(.4, 0, .6, 1) infinite pulse;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: 1s linear infinite spin;
 }
 
 .cursor-default {
@@ -1207,6 +1237,10 @@ body {
 
 .break-words {
   overflow-wrap: break-word;
+}
+
+.rounded {
+  border-radius: .25rem;
 }
 
 .rounded-2xl {
@@ -1435,6 +1469,10 @@ body {
   background-color: hsl(var(--muted));
 }
 
+.bg-muted\/20 {
+  background-color: hsl(var(--muted) / .2);
+}
+
 .bg-muted\/30 {
   background-color: hsl(var(--muted) / .3);
 }
@@ -1601,6 +1639,16 @@ body {
   padding-bottom: .375rem;
 }
 
+.py-10 {
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+}
+
+.py-12 {
+  padding-top: 3rem;
+  padding-bottom: 3rem;
+}
+
 .py-2 {
   padding-top: .5rem;
   padding-bottom: .5rem;
@@ -1624,6 +1672,11 @@ body {
 .py-4 {
   padding-top: 1rem;
   padding-bottom: 1rem;
+}
+
+.py-40 {
+  padding-top: 10rem;
+  padding-bottom: 10rem;
 }
 
 .py-6 {
@@ -2346,6 +2399,10 @@ body {
   background-color: hsl(var(--sidebar-accent));
 }
 
+.hover\:bg-success\/20:hover {
+  background-color: hsl(var(--success) / .2);
+}
+
 .hover\:text-accent-foreground:hover {
   color: hsl(var(--accent-foreground));
 }
@@ -2509,6 +2566,10 @@ body {
 
 .disabled\:opacity-50:disabled {
   opacity: .5;
+}
+
+.disabled\:opacity-60:disabled {
+  opacity: .6;
 }
 
 .group\/menu-item:focus-within .group-focus-within\/menu-item\:opacity-100 {

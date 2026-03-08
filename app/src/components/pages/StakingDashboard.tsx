@@ -6,15 +6,19 @@ import { useHederaWallet } from "@/hooks/use-hedera-wallet";
 import { useStakingPortfolio } from "@/hooks/useStaking";
 import { useAgents } from "@/hooks/useAgents";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
+import { CONTRACT_ADDRESSES, STAKING_VAULT_ABI } from "@/lib/contracts";
+import { formatHbar } from "@/lib/hedera";
+import { toast } from "sonner";
 
 export default function StakingDashboard() {
   const [showStakeModal, setShowStakeModal] = useState(false);
-  const { selectedAccountId } = useHederaWallet();
+  const [isProcessing, setIsProcessing] = useState<Record<string, boolean>>({});
+  const { selectedAccountId, executeContractFunction } = useHederaWallet();
 
   const { data: portfolio, isLoading: isPortfolioLoading } = useStakingPortfolio();
   const { data: agents = [] } = useAgents();
 
-  const totalStaked = portfolio ? Number(portfolio.totalStaked) / 1e8 : 0;
+  const totalStaked = portfolio ? Number(formatHbar(portfolio.totalStaked)) : 0;
 
   // Calculate total across all positions
   let totalRewards = 0n;
@@ -23,9 +27,49 @@ export default function StakingDashboard() {
       totalRewards += p.pendingReward;
     });
   }
-  const totalRewardsHbar = Number(totalRewards) / 1e8;
+  const totalRewardsHbar = Number(formatHbar(totalRewards));
 
   const positionsList = portfolio?.positions ? Object.entries(portfolio.positions) : [];
+
+  const handleUnstake = async (agentId: number, amountRaw: bigint) => {
+    if (!selectedAccountId) return;
+    try {
+      setIsProcessing(p => ({ ...p, [`unstake-${agentId}`]: true }));
+      toast.loading("Sending unstake transaction...", { id: `unstake-${agentId}` });
+      await executeContractFunction(
+        CONTRACT_ADDRESSES.stakingVault,
+        STAKING_VAULT_ABI,
+        "unstake",
+        [agentId, amountRaw.toString()]
+      );
+      toast.success("Successfully unstaked HBAR!", { id: `unstake-${agentId}` });
+    } catch (err: any) {
+      console.error("Unstaking failed:", err);
+      toast.error(`Unstake failed: ${err.message || "Unknown error"}`, { id: `unstake-${agentId}` });
+    } finally {
+      setIsProcessing(p => ({ ...p, [`unstake-${agentId}`]: false }));
+    }
+  };
+
+  const handleClaim = async (agentId: number) => {
+    if (!selectedAccountId) return;
+    try {
+      setIsProcessing(p => ({ ...p, [`claim-${agentId}`]: true }));
+      toast.loading("Claiming rewards...", { id: `claim-${agentId}` });
+      await executeContractFunction(
+        CONTRACT_ADDRESSES.stakingVault,
+        STAKING_VAULT_ABI,
+        "claimReward",
+        [agentId]
+      );
+      toast.success("Successfully claimed rewards!", { id: `claim-${agentId}` });
+    } catch (err: any) {
+      console.error("Claiming failed:", err);
+      toast.error(`Claim failed: ${err.message || "Unknown error"}`, { id: `claim-${agentId}` });
+    } finally {
+      setIsProcessing(p => ({ ...p, [`claim-${agentId}`]: false }));
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -129,8 +173,8 @@ export default function StakingDashboard() {
                   const directoryMetadata = getAgentDirectoryEntry(agent?.name || String(agentId));
                   const avatar = directoryMetadata?.avatar || "🤖";
 
-                  const amountHbar = Number(pos.stake.amount) / 1e8;
-                  const rewardHbar = Number(pos.pendingReward) / 1e8;
+                  const amountHbar = Number(formatHbar(pos.stake.amount));
+                  const rewardHbar = Number(formatHbar(pos.pendingReward));
 
                   return (
                     <motion.tr
@@ -149,9 +193,26 @@ export default function StakingDashboard() {
                       <td className="py-4 pr-4 font-mono text-foreground">{amountHbar.toLocaleString()} HBAR</td>
                       <td className="py-4 pr-4 font-mono text-success">+{rewardHbar.toLocaleString(undefined, { maximumFractionDigits: 2 })} HBAR</td>
                       <td className="py-4">
-                        <button className="rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors">
-                          Unstake
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {rewardHbar > 0 && (
+                            <button
+                              onClick={() => handleClaim(agentId)}
+                              disabled={isProcessing[`claim-${agentId}`] || isProcessing[`unstake-${agentId}`]}
+                              className="rounded-lg border border-success/30 bg-success/10 px-3 py-1.5 text-xs font-medium text-success hover:bg-success/20 transition-colors disabled:opacity-50"
+                            >
+                              {isProcessing[`claim-${agentId}`] ? <Loader2 className="h-3 w-3 animate-spin inline mr-1" /> : ""}
+                              Claim
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleUnstake(agentId, pos.stake.amount)}
+                            disabled={isProcessing[`unstake-${agentId}`]}
+                            className="rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-50"
+                          >
+                            {isProcessing[`unstake-${agentId}`] ? <Loader2 className="h-3 w-3 animate-spin inline mr-1" /> : ""}
+                            Unstake
+                          </button>
+                        </div>
                       </td>
                     </motion.tr>
                   );

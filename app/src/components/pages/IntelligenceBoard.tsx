@@ -9,6 +9,8 @@ import { ArrowUpRight, Zap, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 
+import { formatHbar } from "@/lib/hedera";
+
 export default function IntelligenceBoard() {
   const { data: agents = [], isLoading: agentsLoading } = useAgents();
   const { data: round, isLoading: roundLoading } = useCurrentRound();
@@ -17,7 +19,7 @@ export default function IntelligenceBoard() {
   const networkStats = {
     totalPredictions: agents.reduce((acc, a) => acc + a.totalPredictions, 0),
     totalHcsMessages: agents.reduce((acc, a) => acc + a.totalPredictions * 2, 0), // Base logic
-    totalValueStaked: Number(tvl) / 1e8,
+    totalValueStaked: Number(formatHbar(tvl)),
     activeAgents: agents.filter(a => a.active).length,
   };
 
