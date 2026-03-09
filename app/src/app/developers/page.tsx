@@ -1,6 +1,39 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
+
+function CodeBlock({ code, label }: { code: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <div className="relative mt-2 overflow-hidden rounded-xl border border-border/70 bg-black/85">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border/60 text-[11px] font-mono text-muted-foreground">
+        <span>{label || "example"}</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="rounded-md border border-border/60 bg-black/40 px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:border-foreground/60"
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className="max-h-[320px] overflow-auto p-4 text-xs font-mono text-muted-foreground">
+        {code}
+      </pre>
+    </div>
+  );
+}
 
 export default function DevelopersPage() {
   return (
@@ -58,8 +91,13 @@ export default function DevelopersPage() {
         <p className="text-xs md:text-sm text-muted-foreground">
           Sample response from <span className="font-mono">GET /api/protocol/top-agents</span>.
         </p>
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-black/80 p-4 text-xs font-mono text-muted-foreground">
-{`HTTP 200 OK
+        <CodeBlock
+          label="curl"
+          code={`curl https://ascend/api/protocol/top-agents`}
+        />
+        <CodeBlock
+          label="response"
+          code={`HTTP 200 OK
 Content-Type: application/json
 
 [
@@ -84,7 +122,7 @@ Content-Type: application/json
     "avatar": "📡"
   }
 ]`}
-        </pre>
+        />
       </motion.section>
 
       <motion.section
@@ -98,8 +136,9 @@ Content-Type: application/json
           Sample response from{" "}
           <span className="font-mono">GET /api/protocol/agent/1/signals</span>.
         </p>
-        <pre className="mt-2 overflow-x-auto rounded-xl bg-black/80 p-4 text-xs font-mono text-muted-foreground">
-{`HTTP 200 OK
+        <CodeBlock
+          label="response"
+          code={`HTTP 200 OK
 Content-Type: application/json
 
 {
@@ -125,7 +164,7 @@ Content-Type: application/json
     }
   ]
 }`}
-        </pre>
+        />
       </motion.section>
 
       <motion.section

@@ -10,6 +10,14 @@ import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 import { useStakingPortfolio } from "@/hooks/useStaking";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import { LineChart, Line, ResponsiveContainer } from "recharts";
+
+const thinkingMessages = [
+  "Analyzing RSI divergence...",
+  "Scanning sentiment signals...",
+  "Detecting volatility compression...",
+  "Running ensemble models...",
+];
 
 export default function LiveRound() {
   const { data: round, isLoading: roundLoading } = useCurrentRound();
@@ -32,6 +40,7 @@ export default function LiveRound() {
   const [winningAgents, setWinningAgents] = useState<string[]>([]);
   const [resolutionOutcome, setResolutionOutcome] = useState<"UP" | "DOWN" | null>(null);
   const prevStatusRef = useRef<number | null>(null);
+  const [thinkingIndex, setThinkingIndex] = useState(0);
 
   const priceChange = (round?.endPrice && round?.endPrice > 0)
     ? round.endPrice - (round?.startPrice || 0)
@@ -82,6 +91,30 @@ export default function LiveRound() {
     }
     return latestByAgent;
   }, [roundFeed]);
+
+  // Rotate agent "thinking" messages during commit phase
+  useEffect(() => {
+    if (!round || round.status !== 0) return;
+    const id = setInterval(() => {
+      setThinkingIndex(prev => (prev + 1) % thinkingMessages.length);
+    }, 2000);
+    return () => clearInterval(id);
+  }, [round?.status]);
+
+  const sparklineData = useMemo(() => {
+    if (!round || !currentPriceDisplay) return [];
+    const start = round.startPrice;
+    const current = currentPriceDisplay;
+    const points = 10;
+    const data = [];
+    for (let i = 0; i < points; i++) {
+      const t = i / (points - 1);
+      const base = Number(start + (current - start) * t);
+      const noise = (Math.sin(i * 1.3) * Number(start) * 0.002);
+      data.push({ t: i, price: base + noise });
+    }
+    return data;
+  }, [round, currentPriceDisplay]);
 
   // Detect transition to resolved round for winner moment + emotional feedback
   useEffect(() => {
@@ -198,7 +231,25 @@ export default function LiveRound() {
                 </div>
               </div>
             </div>
-            <RoundTimer endTime={effectiveEndTime} phase={effectivePhase} />
+            <div className="flex flex-col items-end gap-3">
+              {sparklineData.length > 0 && (
+                <div className="h-10 w-32">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={sparklineData}>
+                      <Line
+                        type="monotone"
+                        dataKey="price"
+                        stroke={isPositive ? "#22c55e" : "#ef4444"}
+                        strokeWidth={1.5}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+              <RoundTimer endTime={effectiveEndTime} phase={effectivePhase} />
+            </div>
           </div>
 
           {/* Explicit market movement summary for demo clarity */}
@@ -304,7 +355,9 @@ export default function LiveRound() {
                       </span>
                     )}
                     {round.status === 0 && (!commitment || !commitment.committed) && (
-                      <span className="text-[10px] font-mono text-muted-foreground tracking-wider">Waiting…</span>
+                      <span className="text-[10px] font-mono text-sky-400 animate-pulse tracking-wider">
+                        🧠 {thinkingMessages[thinkingIndex]}
+                      </span>
                     )}
                   </div>
 

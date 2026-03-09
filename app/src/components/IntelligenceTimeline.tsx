@@ -100,8 +100,6 @@ function TimelineEventCard({
   event: import("@/lib/types").TimelineEvent;
   index: number;
 }) {
-  const icon = EVENT_ICONS[event.eventType] ?? <Zap className="h-3.5 w-3.5" />;
-  const color = EVENT_COLORS[event.eventType] ?? "text-muted-foreground";
   const mirrorUrl =
     event.topicId != null && event.sequenceNumber != null
       ? getMirrorMessageUrl(event.topicId, event.sequenceNumber)
@@ -117,42 +115,32 @@ function TimelineEventCard({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.02, 0.25), duration: 0.2 }}
-      className="group rounded-md bg-black/5 px-3 py-2.5 font-mono text-[11px] text-foreground/90 hover:bg-black/10 transition-colors"
+      className="font-mono text-[11px] text-foreground/90"
     >
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 text-muted-foreground/60">
-          <span className="rounded-sm bg-black/40 px-1.5 py-0.5">
-            [{timestamp}]
-          </span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className={`${color} inline-flex items-center gap-1`}>
-              {icon}
-            </span>
-            <span className="truncate">{mainLine}</span>
-            {event.detail && (
-              <span className="ml-2">
-                <DetailBadge detail={event.detail} />
-              </span>
-            )}
-          </div>
+      <div className="flex items-start gap-2">
+        <span className="text-muted-foreground/80">[{timestamp}]</span>
+        <span className="truncate">
+          {mainLine}
+          {event.detail && (
+            <>
+              {" "}
+              <DetailBadge detail={event.detail} />
+            </>
+          )}
           {verifiedHref && (
-            <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground/70">
-              <Clock className="h-3 w-3" />
-              <span>Verified by Hedera</span>
+            <>
+              {" "}
               <a
                 href={verifiedHref}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/5 px-2 py-0.5 text-[9px] font-medium text-primary hover:bg-primary/10"
+                className="text-[10px] text-primary/80 hover:text-primary underline underline-offset-2"
               >
-                <CheckCircle2 className="h-3 w-3" />
-                View proof
+                (proof)
               </a>
-            </div>
+            </>
           )}
-        </div>
+        </span>
       </div>
     </motion.div>
   );

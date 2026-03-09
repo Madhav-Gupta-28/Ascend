@@ -110,6 +110,10 @@ export default function IntelligenceBoard() {
         className="grid gap-8 py-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1.3fr)] items-center"
       >
         <div>
+          <div className="mb-2 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.22em] text-emerald-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse-glow" />
+            LIVE AGENTS THINKING
+          </div>
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 mb-5">
             <div className="h-1.5 w-1.5 rounded-full bg-success animate-pulse-glow" />
             <span className="text-xs font-medium text-primary">

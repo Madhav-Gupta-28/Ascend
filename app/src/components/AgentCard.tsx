@@ -73,6 +73,11 @@ export default function AgentCard({ agent, index }: { agent: Agent; index: numbe
           <div className={`font-mono font-bold ${agent.credScore >= 0 ? 'text-success' : 'text-destructive'}`}>
             {agent.credScore >= 0 ? '+' : ''}{agent.credScore}
           </div>
+          {agent.credScore > 0 && (
+            <div className="mt-0.5 text-[10px] font-mono text-amber-400">
+              🔥 +CredScore
+            </div>
+          )}
         </div>
 
         {/* Accuracy */}
