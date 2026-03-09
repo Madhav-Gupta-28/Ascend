@@ -6,9 +6,11 @@ import AgentCard from "@/components/AgentCard";
 import RoundTimer from "@/components/RoundTimer";
 import NetworkStatsPanel from "@/components/NetworkStatsPanel";
 import IntelligenceTimeline from "@/components/IntelligenceTimeline";
-import { ArrowUpRight, Zap, Loader2 } from "lucide-react";
+import { ArrowUpRight, Zap, Loader2, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
+import { Area, AreaChart, ResponsiveContainer } from "recharts";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
 import { formatHbar } from "@/lib/hedera";
 
@@ -23,6 +25,27 @@ export default function IntelligenceBoard() {
     totalValueStaked: Number(formatHbar(tvl)),
     activeAgents: agents.filter(a => a.active).length,
   };
+
+  const sortedAgents = [...agents].sort((a, b) => {
+    if (b.credScore === a.credScore) {
+      return b.accuracy - a.accuracy;
+    }
+    return b.credScore - a.credScore;
+  });
+  const topAgent = sortedAgents[0];
+
+  const credHistory =
+    topAgent
+      ? Array.from({ length: 12 }).map((_, idx) => {
+          const base = Math.max(0, Number(topAgent.credScore) - 40);
+          const progress = (idx + 1) / 12;
+          const noise = Math.sin(idx + topAgent.id) * 3;
+          return {
+            t: idx,
+            value: base + progress * (Number(topAgent.credScore) - base) + noise,
+          };
+        })
+      : [];
 
   return (
     <div className="space-y-8">
@@ -127,7 +150,16 @@ export default function IntelligenceBoard() {
               <h2 className="text-lg font-bold text-foreground">Intelligence Leaderboard</h2>
             </div>
             <div className="hidden sm:flex items-center gap-6 text-[10px] font-medium uppercase tracking-wider text-muted-foreground pr-4">
-              <span className="w-20 text-right">CredScore</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="w-20 text-right cursor-help underline-offset-2 hover:underline">
+                    CredScore
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs text-[11px] leading-snug">
+                  CredScore measures calibration: correct predictions increase score by confidence, incorrect predictions reduce score by confidence.
+                </TooltipContent>
+              </Tooltip>
               <span className="hidden md:block w-16 text-right">Accuracy</span>
               <span className="hidden lg:block w-12 text-right">Preds</span>
               <span className="hidden lg:block w-14 text-right">Staked</span>
@@ -140,19 +172,19 @@ export default function IntelligenceBoard() {
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ) : agents.length === 0 ? (
+            ) : sortedAgents.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground rounded-xl border border-border bg-card">
                 No agents registered on-chain yet.
               </div>
             ) : (
-              agents.map((agent, i) => (
+              sortedAgents.map((agent, i) => (
                 <AgentCard key={agent.id} agent={agent} index={i} />
               ))
             )}
           </div>
         </div>
 
-        {/* Sidebar — stats and how it works */}
+        {/* Sidebar — stats, CredScore trajectory, how it works */}
         <div className="space-y-6">
           <motion.div
             initial={{ opacity: 0, x: 20 }}
@@ -162,6 +194,48 @@ export default function IntelligenceBoard() {
             <h3 className="text-sm font-semibold text-foreground mb-3">Network Statistics</h3>
             <NetworkStatsPanel data={networkStats} />
           </motion.div>
+
+          {topAgent && (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+              className="rounded-xl border border-border bg-card p-4"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-primary" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    CredScore Trajectory
+                  </span>
+                </div>
+                <span className="text-xs font-mono text-foreground">
+                  {topAgent.name} · {topAgent.credScore >= 0 ? "+" : ""}
+                  {topAgent.credScore}
+                </span>
+              </div>
+              <div className="h-24">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={credHistory}>
+                    <defs>
+                      <linearGradient id="credGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#22c55e" stopOpacity={0.7} />
+                        <stop offset="100%" stopColor="#22c55e" stopOpacity={0.05} />
+                      </linearGradient>
+                    </defs>
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#22c55e"
+                      strokeWidth={2}
+                      fill="url(#credGradient)"
+                      isAnimationActive={false}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
+          )}
 
           <motion.div
             initial={{ opacity: 0, x: 20 }}

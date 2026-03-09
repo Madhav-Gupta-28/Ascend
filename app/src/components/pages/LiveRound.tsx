@@ -5,16 +5,18 @@ import { usePredictionsFeed } from "@/hooks/useHCSMessages";
 import RoundTimer from "@/components/RoundTimer";
 import IntelligenceTimeline from "@/components/IntelligenceTimeline";
 import { ArrowUp, ArrowDown, Eye, EyeOff, Loader2 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 import { useHederaWallet } from "@/hooks/use-hedera-wallet";
 import { CONTRACT_ADDRESSES, PREDICTION_MARKET_ABI } from "@/lib/contracts";
+import { useStakingPortfolio } from "@/hooks/useStaking";
 import { toast } from "sonner";
 
 export default function LiveRound() {
   const { data: round, isLoading: roundLoading } = useCurrentRound();
   const { data: agents = [] } = useAgents();
   const { isConnected, executeContractFunction } = useHederaWallet();
+  const { data: stakingPortfolio } = useStakingPortfolio();
 
   // Fetch real on-chain commitments for all registered agents for the current round
   const agentIds = agents.map(a => Number(a.id));
@@ -29,6 +31,10 @@ export default function LiveRound() {
 
   const [showRevealed, setShowRevealed] = useState(defaultShowRevealed);
   const [claiming, setClaiming] = useState<Record<number, boolean>>({});
+  const [showResolutionOverlay, setShowResolutionOverlay] = useState(false);
+  const [winningAgents, setWinningAgents] = useState<string[]>([]);
+  const [resolutionOutcome, setResolutionOutcome] = useState<"UP" | "DOWN" | null>(null);
+  const prevStatusRef = useRef<number | null>(null);
 
   const priceChange = (round?.endPrice && round?.endPrice > 0)
     ? round.endPrice - (round?.startPrice || 0)
@@ -66,6 +72,58 @@ export default function LiveRound() {
     return feed.filter(msg => Number(msg.parsed.roundId) === Number(round?.id));
   }, [feed, round?.id]);
 
+  // Derive latest reasoning per agent for Clash Board
+  const clashHighlights = useMemo(() => {
+    const latestByAgent: Record<string, string> = {};
+    for (const msg of roundFeed) {
+      const agentId = String(msg.parsed.agentId ?? "").trim();
+      if (!agentId) continue;
+      const reasoning: string = msg.parsed.reasoning || "";
+      if (!reasoning) continue;
+      const firstSentence = reasoning.split(/(?<=[.!?])\s+/)[0];
+      latestByAgent[agentId] = firstSentence;
+    }
+    return latestByAgent;
+  }, [roundFeed]);
+
+  // Detect transition to resolved round for winner moment + emotional feedback
+  useEffect(() => {
+    if (!round) return;
+    const prev = prevStatusRef.current;
+    const currentStatus = round.status;
+    prevStatusRef.current = currentStatus;
+
+    if (prev !== 2 && currentStatus === 2) {
+      const outcomeDir: "UP" | "DOWN" = round.outcome === 0 ? "UP" : "DOWN";
+      setResolutionOutcome(outcomeDir);
+
+      const winners: string[] = [];
+      const stakedAgentIds = stakingPortfolio ? Object.keys(stakingPortfolio.positions).map((id) => Number(id)) : [];
+
+      agents.forEach((agent) => {
+        const c = (commitments as any)[agent.id];
+        if (!c?.revealed) return;
+        const predictedDir: "UP" | "DOWN" | null =
+          Number(c.direction) === 0 ? "UP" : Number(c.direction) === 1 ? "DOWN" : null;
+        const hasStake = stakedAgentIds.includes(Number(agent.id));
+        if (predictedDir && predictedDir === outcomeDir && hasStake) {
+          winners.push(agent.name);
+        }
+      });
+
+      setWinningAgents(winners);
+      setShowResolutionOverlay(true);
+
+      if (winners.length > 0) {
+        toast.success(`Round resolved ${outcomeDir}. Your stake followed ${winners.join(", ")} and earned yield.`, {
+          id: "round-resolution",
+        });
+      } else if (stakingPortfolio && Object.keys(stakingPortfolio.positions).length > 0) {
+        toast(`Round resolved ${outcomeDir}. Your staked agents missed this one.`, { id: "round-resolution" });
+      }
+    }
+  }, [round, agents, commitments, stakingPortfolio]);
+
   if (roundLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-40">
@@ -84,7 +142,7 @@ export default function LiveRound() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 relative">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-bold text-foreground mb-1">Live Round #{round.id}</h1>
         <p className="text-sm text-muted-foreground">Watch AI agents compete in real-time</p>
@@ -121,6 +179,23 @@ export default function LiveRound() {
             endTime={effectiveEndTime}
             phase={effectivePhase}
           />
+        </div>
+
+        {/* Explicit market movement summary for demo clarity */}
+        <div className="mt-4 flex flex-wrap items-center gap-4 text-xs font-mono text-muted-foreground">
+          <span className="uppercase tracking-wider text-[11px] text-foreground/80">HBAR / USD</span>
+          <span>Start: ${round.startPrice.toFixed(4)}</span>
+          <span>
+            {isResolvedPhase ? "Final" : "Current"}: ${currentPriceDisplay?.toFixed(4) || "---"}
+          </span>
+          <span className={isPositive ? "text-success" : "text-destructive"}>
+            Change: {isPositive ? "+" : ""}{priceChangePercent}%
+          </span>
+          {isResolvedPhase && (
+            <span className={`font-semibold ${isPositive ? "text-success" : "text-destructive"}`}>
+              HBAR moved {isPositive ? "UP" : "DOWN"}
+            </span>
+          )}
         </div>
       </motion.div>
 
@@ -273,7 +348,53 @@ export default function LiveRound() {
         />
       </motion.div>
 
-      {/* Agent reasoning feed */}
+      {/* Protocol Integrations — simulate downstream DeFi consumers */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.38 }}
+        className="rounded-2xl border border-border bg-card p-6"
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-bold text-foreground">Protocol Integrations</h2>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+            Simulated · Demo
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Downstream DeFi protocols consuming the Ascend intelligence feed to route capital toward the top agents.
+        </p>
+        <div className="space-y-2 text-sm">
+          {[
+            "Aura Vaults",
+            "Hedera Liquid Staking",
+            "DeFi Pulse Streams",
+          ].map((name, idx) => {
+            const topAgent = agents[0];
+            return (
+              <div
+                key={name}
+                className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2"
+              >
+                <div className="flex flex-col">
+                  <span className="font-semibold text-foreground">{name}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Querying Ascend /api/protocols/{name.toLowerCase().replace(/\\s+/g, "-")}…
+                  </span>
+                </div>
+                <div className="text-right">
+                  <div className="text-[11px] font-mono text-primary">
+                    Following: {topAgent ? topAgent.name : "—"}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">Routing capital to round winner</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </motion.div>
+
+      {/* Clash Board — Agent reasoning highlights */}
       {showRevealed && roundFeed.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -281,14 +402,19 @@ export default function LiveRound() {
           transition={{ delay: 0.4 }}
           className="rounded-2xl border border-border bg-card p-6"
         >
-          <h2 className="text-lg font-bold text-foreground mb-4">Agent Reasoning Feed</h2>
-          <div className="space-y-3">
+          <h2 className="text-lg font-bold text-foreground mb-1">Clash Board — Agent Reasoning Highlights</h2>
+          <p className="text-xs text-muted-foreground mb-4">
+            Snapshot of how each agent interprets the same market at this moment.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {roundFeed.map((msg, i) => {
               const agentIdMatch = msg.parsed.agentId;
               const agent = agents.find(a => String(a.id) === String(agentIdMatch) || a.name.toLowerCase() === String(agentIdMatch).toLowerCase());
               const nameDisplay = agent?.name || msg.parsed.agentId;
               const directoryMetadata = getAgentDirectoryEntry(nameDisplay);
               const avatar = directoryMetadata?.avatar || "🤖";
+              const reasoning: string = msg.parsed.reasoning || "";
+              const firstSentence = reasoning.split(/(?<=[.!?])\s+/)[0] || reasoning;
 
               return (
                 <motion.div
@@ -301,12 +427,56 @@ export default function LiveRound() {
                   <span className="text-lg mt-0.5">{avatar}</span>
                   <div>
                     <span className="text-sm font-semibold text-foreground">{nameDisplay}</span>
-                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed">"{msg.parsed.reasoning}"</p>
+                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed">"{firstSentence}"</p>
                   </div>
                 </motion.div>
               );
             })}
           </div>
+        </motion.div>
+      )}
+
+      {/* Resolution strike overlay */}
+      {showResolutionOverlay && resolutionOutcome && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setShowResolutionOverlay(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 260, damping: 26 }}
+            className="mx-4 max-w-xl rounded-3xl border border-primary/40 bg-gradient-to-b from-background to-background/90 px-8 py-10 text-center shadow-2xl"
+          >
+            <div className="text-[11px] font-mono uppercase tracking-[0.25em] text-primary mb-3">
+              Resolution Strike
+            </div>
+            <div className="text-3xl md:text-4xl font-extrabold text-foreground mb-4">
+              Round #{round.id} Resolved {resolutionOutcome}
+            </div>
+            {winningAgents.length > 0 ? (
+              <p className="text-sm text-muted-foreground mb-6">
+                Your staked agents{" "}
+                <span className="font-semibold text-foreground">
+                  {winningAgents.join(", ")}
+                </span>{" "}
+                were on the right side of the market.
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground mb-6">
+                This time, your staked agents missed the final move. The intelligence market keeps score.
+              </p>
+            )}
+            <button
+              onClick={() => setShowResolutionOverlay(false)}
+              className="mt-2 rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              Continue
+            </button>
+          </motion.div>
         </motion.div>
       )}
     </div>
