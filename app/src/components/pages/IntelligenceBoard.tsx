@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { useAgents } from "@/hooks/useAgents";
 import { useCurrentRound } from "@/hooks/useRounds";
@@ -34,6 +35,59 @@ export default function IntelligenceBoard() {
   });
   const topAgent = sortedAgents[0];
 
+  const roundDerived = useMemo(() => {
+    if (!round) {
+      return null;
+    }
+    const priceChange =
+      round.endPrice && round.endPrice > 0 ? round.endPrice - round.startPrice : 0;
+    const currentPriceDisplay =
+      round.endPrice && round.endPrice > 0 ? round.endPrice : round.startPrice;
+    const priceChangePercent = round.startPrice
+      ? ((priceChange / round.startPrice) * 100).toFixed(2)
+      : "0.00";
+    const isPositive = priceChange >= 0;
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const effectivePhase =
+      round.status === 2
+        ? "resolved"
+        : round.status === 3
+          ? "cancelled"
+          : round.status === 0 && nowSec > round.commitDeadline
+            ? "revealing"
+            : round.status === 1 && nowSec > round.revealDeadline
+              ? "revealing"
+              : round.status === 0
+                ? "committing"
+                : "revealing";
+    const effectiveEndTime =
+      effectivePhase === "resolved" || effectivePhase === "cancelled"
+        ? round.resolveAfter
+        : effectivePhase === "committing"
+          ? round.commitDeadline
+          : round.revealDeadline;
+
+    const phaseLabel =
+      effectivePhase === "committing"
+        ? "Committing"
+        : effectivePhase === "revealing"
+          ? "Revealing"
+          : effectivePhase === "resolved"
+            ? "Resolved"
+            : "Pending";
+
+    return {
+      priceChange,
+      currentPriceDisplay,
+      priceChangePercent,
+      isPositive,
+      effectivePhase,
+      effectiveEndTime,
+      phaseLabel,
+    };
+  }, [round]);
+
   const credHistory =
     topAgent
       ? Array.from({ length: 12 }).map((_, idx) => {
@@ -48,25 +102,139 @@ export default function IntelligenceBoard() {
       : [];
 
   return (
-    <div className="space-y-8">
-      {/* Hero */}
+    <div className="space-y-10">
+      {/* Hero with live round preview */}
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-center py-8"
+        className="grid gap-8 py-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1.3fr)] items-center"
       >
-        <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 mb-4">
-          <div className="h-1.5 w-1.5 rounded-full bg-success animate-pulse-glow" />
-          <span className="text-xs font-medium text-primary">
-            {roundLoading ? "Loading round..." : `Live — Round #${round?.id || "---"}`}
-          </span>
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 mb-5">
+            <div className="h-1.5 w-1.5 rounded-full bg-success animate-pulse-glow" />
+            <span className="text-xs font-medium text-primary">
+              {roundLoading ? "Loading live arena..." : `Live Arena — Round #${round?.id || "---"}`}
+            </span>
+          </div>
+          <motion.h1
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-4 leading-tight"
+          >
+            <span className="block text-gradient-hero">PROVE AI INTELLIGENCE</span>
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 }}
+            className="text-sm sm:text-base md:text-lg text-muted-foreground max-w-xl"
+          >
+            Ascend is a live arena where autonomous AI agents compete on real predictions and build
+            verifiable credibility on Hedera.
+          </motion.p>
         </div>
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">
-          <span className="text-gradient-hero">ASCEND</span>
-        </h1>
-        <p className="text-lg text-muted-foreground max-w-md mx-auto">
-          Ascend discovers which AI agents are actually intelligent. A verifiable intelligence market.
-        </p>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.16 }}
+          className="rounded-2xl border border-primary/20 bg-gradient-to-b from-card to-card/95 p-5 shadow-lg shadow-primary/5"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
+                Live Round Preview
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                HBAR / USD · on-chain intelligence feed
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Asset
+              </div>
+              <div className="font-mono text-sm font-semibold text-foreground">HBAR / USD</div>
+            </div>
+          </div>
+
+          {round && roundDerived ? (
+            <>
+              <div className="grid grid-cols-2 gap-4 mb-4 text-xs">
+                <div className="space-y-1">
+                  <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Start Price
+                  </div>
+                  <div className="font-mono text-base font-semibold text-foreground">
+                    ${round.startPrice.toFixed(4)}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Current Price
+                  </div>
+                  <div
+                    className={`font-mono text-base font-semibold ${
+                      roundDerived.isPositive ? "text-success" : "text-destructive"
+                    } animate-soft-pulse`}
+                  >
+                    ${roundDerived.currentPriceDisplay.toFixed(4)}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Price Change
+                  </div>
+                  <div
+                    className={`font-mono text-sm ${
+                      roundDerived.isPositive ? "text-success" : "text-destructive"
+                    }`}
+                  >
+                    {roundDerived.isPositive ? "+" : ""}
+                    {roundDerived.priceChangePercent}%{" "}
+                    <span className="text-[10px] text-muted-foreground">vs. start</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Current Phase
+                  </div>
+                  <div className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
+                    <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                    {roundDerived.phaseLabel}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-border/60">
+                <div className="text-[11px] text-muted-foreground">
+                  Round #{round.id} ·{" "}
+                  <span className="font-mono">
+                    {roundDerived.effectivePhase === "committing"
+                      ? "Agents locking analysis"
+                      : roundDerived.effectivePhase === "revealing"
+                        ? "Decrypting intelligence"
+                        : roundDerived.effectivePhase === "resolved"
+                          ? "Resolution strike recorded"
+                          : "Waiting for next arena"}
+                  </span>
+                </div>
+                <Link
+                  href={`/round/${round.id}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors"
+                >
+                  View Live Arena
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-center text-xs text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mb-3 text-muted-foreground" />
+              <p>No active round found. Start the orchestrator to open the arena.</p>
+            </div>
+          )}
+        </motion.div>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -122,12 +290,9 @@ export default function IntelligenceBoard() {
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  {(() => {
-                    const nowSec = Math.floor(Date.now() / 1000);
-                    const effectivePhase = round.status === 2 ? "resolved" : round.status === 3 ? "cancelled" : round.status === 0 && nowSec > round.commitDeadline ? "revealing" : round.status === 1 && nowSec > round.revealDeadline ? "revealing" : round.status === 0 ? "committing" : "revealing";
-                    const effectiveEndTime = effectivePhase === "resolved" || effectivePhase === "cancelled" ? round.resolveAfter : effectivePhase === "committing" ? round.commitDeadline : round.revealDeadline;
-                    return <RoundTimer endTime={effectiveEndTime} phase={effectivePhase} />;
-                  })()}
+                  {roundDerived && (
+                    <RoundTimer endTime={roundDerived.effectiveEndTime} phase={roundDerived.effectivePhase} />
+                  )}
                   <Link
                     href={`/round/${round.id}`}
                     className="flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"

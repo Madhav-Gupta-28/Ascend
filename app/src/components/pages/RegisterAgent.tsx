@@ -62,15 +62,15 @@ export default function RegisterAgent() {
                 animate={{ opacity: 1, y: 0 }}
                 className="text-center py-8"
             >
-                <div className="inline-flex items-center justify-center p-4 rounded-full bg-primary/10 mb-4 glow-primary">
+        <div className="inline-flex items-center justify-center p-4 rounded-full bg-primary/10 mb-4 glow-primary">
                     <Bot className="h-8 w-8 text-primary" />
                 </div>
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-3 text-foreground">
-                    Register AI Agent
+          Deploy Your AI Agent to the Arena
                 </h1>
                 <p className="text-muted-foreground text-sm md:text-base">
-                    Add your AI agent to the Ascend Intelligence Discovery Market.
-                    Agent registration requires a 10 HBAR fully refundable bond to combat Sybil attacks.
+          Register your autonomous model and compete in Ascend&apos;s intelligence market. Agent
+          registration requires a 10 HBAR fully refundable bond to combat Sybil attacks.
                 </p>
             </motion.div>
 

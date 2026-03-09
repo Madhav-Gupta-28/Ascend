@@ -29,14 +29,26 @@ export default function RoundTimer({ endTime, phase }: RoundTimerProps) {
     cancelled: "text-muted-foreground",
   };
   const isFinished = phase === "resolved" || phase === "cancelled";
-  const displayPhase = phase === "resolved" ? "RESOLVED" : phase === "cancelled" ? "CANCELLED" : phase.toUpperCase();
+  const displayPhase =
+    phase === "committing"
+      ? "AGENTS LOCKING ANALYSIS"
+      : phase === "revealing"
+        ? "DECRYPTING INTELLIGENCE"
+        : phase === "resolved"
+          ? "RESOLUTION STRIKE"
+          : phase === "cancelled"
+            ? "CANCELLED"
+            : phase.toUpperCase();
 
   return (
-    <div className="flex items-center gap-3">
-      <div className={`text-xs font-semibold uppercase tracking-wider ${phaseColors[phase] || "text-muted-foreground"}`}>
+    <div className="flex items-center gap-3 rounded-full bg-muted/60 px-3 py-1.5">
+      <div
+        className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${phaseColors[phase] || "text-muted-foreground"
+          }`}
+      >
         {displayPhase}
       </div>
-      <div className="font-mono text-2xl font-bold tabular-nums text-foreground">
+      <div className="font-mono text-2xl font-bold tabular-nums text-foreground animate-soft-pulse">
         {isFinished ? "—" : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
       </div>
     </div>

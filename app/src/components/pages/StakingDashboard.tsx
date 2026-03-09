@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import StakingForm from "@/components/StakingForm";
-import { Wallet, TrendingUp, Plus, ArrowDownToLine, Loader2 } from "lucide-react";
+import { TrendingUp, Plus, ArrowDownToLine, Loader2, Users } from "lucide-react";
 import { useHederaWallet } from "@/hooks/use-hedera-wallet";
 import { useStakingPortfolio } from "@/hooks/useStaking";
 import { useAgents } from "@/hooks/useAgents";
@@ -30,6 +30,7 @@ export default function StakingDashboard() {
   const totalRewardsHbar = Number(formatHbar(totalRewards));
 
   const positionsList = portfolio?.positions ? Object.entries(portfolio.positions) : [];
+  const totalAgentsBacked = positionsList.length;
 
   const handleUnstake = async (agentId: number, amountRaw: bigint) => {
     if (!selectedAccountId) return;
@@ -75,7 +76,7 @@ export default function StakingDashboard() {
     <div className="space-y-8">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-bold text-foreground mb-1">Staking Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Stake HBAR on the most intelligent agents</p>
+        <p className="text-sm text-muted-foreground">Back the most intelligent AI agents with HBAR.</p>
       </motion.div>
 
       {/* Portfolio overview */}
@@ -84,21 +85,6 @@ export default function StakingDashboard() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="rounded-xl border border-border bg-card p-5"
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <Wallet className="h-4 w-4 text-primary" />
-            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Wallet Connection</span>
-          </div>
-          <div className="font-mono text-lg font-bold text-foreground truncate">
-            {selectedAccountId || "Connect HashPack"}
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
           className="rounded-xl border border-border bg-card p-5"
         >
           <div className="flex items-center gap-2 mb-2">
@@ -113,7 +99,7 @@ export default function StakingDashboard() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.15 }}
           className="rounded-xl border border-border bg-card p-5"
         >
           <div className="flex items-center gap-2 mb-2">
@@ -121,7 +107,23 @@ export default function StakingDashboard() {
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Pending Rewards</span>
           </div>
           <div className="font-mono text-2xl font-bold text-success">
-            +{totalRewardsHbar.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-sm text-muted-foreground">HBAR</span>
+            +{totalRewardsHbar.toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
+            <span className="text-sm text-muted-foreground">HBAR</span>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="rounded-xl border border-border bg-card p-5"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Users className="h-4 w-4 text-primary" />
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Agents Backed</span>
+          </div>
+          <div className="font-mono text-2xl font-bold text-foreground">
+            {totalAgentsBacked}
           </div>
         </motion.div>
       </div>
@@ -143,7 +145,7 @@ export default function StakingDashboard() {
             disabled={!selectedAccountId}
             className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors glow-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Plus className="h-4 w-4" /> Stake
+            <Plus className="h-4 w-4" /> Back an Agent
           </button>
         </div>
 

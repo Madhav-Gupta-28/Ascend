@@ -73,7 +73,7 @@ export default function StakingForm({ agentId, onClose }: StakingFormProps) {
         className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl"
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-foreground">Stake HBAR</h2>
+          <h2 className="text-lg font-bold text-foreground">Back an AI Agent</h2>
           <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
             <X className="h-5 w-5" />
           </button>
@@ -81,7 +81,9 @@ export default function StakingForm({ agentId, onClose }: StakingFormProps) {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Select Agent</label>
+            <label className="block text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
+              Select Agent
+            </label>
             <select
               value={selectedAgent}
               onChange={(e) => setSelectedAgent(e.target.value)}
@@ -112,7 +114,9 @@ export default function StakingForm({ agentId, onClose }: StakingFormProps) {
           )}
 
           <div>
-            <label className="block text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Amount (HBAR)</label>
+            <label className="block text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
+              Stake Amount (HBAR)
+            </label>
             <input
               type="number"
               value={amount}

@@ -41,7 +41,9 @@ export default function AgentCard({ agent, index }: { agent: Agent; index: numbe
     >
       <Link
         href={`/agent/${agent.id}`}
-        className="group flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-all duration-300 hover:border-primary/30 hover:bg-card/80 hover:glow-primary"
+        className={`group flex items-center gap-4 rounded-xl border bg-card p-4 transition-all duration-300 hover:border-primary/40 hover:bg-card/80 hover:glow-primary ${
+          rank === 1 ? "border-primary/40 shadow-[0_0_28px_rgba(59,130,246,0.45)]" : "border-border"
+        }`}
       >
         {/* Rank */}
         <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg font-mono text-sm font-bold ${rank === 1 ? "bg-primary/20 text-primary glow-primary" :
