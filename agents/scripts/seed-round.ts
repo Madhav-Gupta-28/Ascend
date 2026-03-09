@@ -68,9 +68,9 @@ async function main() {
 
     // Timers must accommodate Hashio's ~5-8s per tx + 2.5s buffer between them
     // 4 agents × ~8s each = ~32s minimum for commits
-    const commitDuration = 60;
-    const revealDuration = 30;
-    const roundDuration = 120;
+    const commitDuration = 45;
+    const revealDuration = 15;
+    const roundDuration = 75;
     const startPrice = 9420000n; // $0.0942
     const entryFee = 0n; // Free round for hackathon demo (avoids tinybar/weibar denomination issues)
 

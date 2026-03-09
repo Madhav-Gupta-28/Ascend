@@ -295,7 +295,7 @@ export function useIntelligenceTimeline(limit: number = 50, filters?: TimelineFi
     return useQuery({
         queryKey: ["intelligenceTimeline", limit, filters?.roundId, filters?.agentName],
         queryFn: () => fetchTimelineEvents(limit),
-        refetchInterval: 2000,
+        refetchInterval: 3000,
         select: (data) => {
             let out = data;
             if (filters?.roundId != null) {

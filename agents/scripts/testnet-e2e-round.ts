@@ -119,9 +119,9 @@ async function main() {
     console.log(`\n🤖 Operating Agents: ${agents.map(a => `${a.name}(#${a.id})`).join(', ')}`);
 
     const config: RoundConfig = {
-        commitDurationSecs: toPositiveInt(process.env.E2E_COMMIT_SECS, 60),
-        revealDurationSecs: toPositiveInt(process.env.E2E_REVEAL_SECS, 30),
-        roundDurationSecs: toPositiveInt(process.env.E2E_ROUND_SECS, 120),
+        commitDurationSecs: toPositiveInt(process.env.E2E_COMMIT_SECS, 45),
+        revealDurationSecs: toPositiveInt(process.env.E2E_REVEAL_SECS, 15),
+        roundDurationSecs: toPositiveInt(process.env.E2E_ROUND_SECS, 75),
         entryFeeHbar: toNonNegativeNumber(process.env.E2E_ENTRY_FEE_HBAR, 0),
     };
 
