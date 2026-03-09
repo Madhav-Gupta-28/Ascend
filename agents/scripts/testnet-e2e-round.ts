@@ -70,25 +70,59 @@ async function main() {
     const orchestrator = new RoundOrchestrator(contracts, hcs, dataCollector, agents);
 
     const agentCount = await contracts.getAgentCount();
-    if (agentCount < agents.length) {
-        console.log(`\n🤖 Registering ${agents.length - agentCount} agents on EVM...`);
-        for (let i = agentCount; i < agents.length; i++) {
-            const agent = agents[i];
-            try {
-                // 10 HBAR registration bond
-                await contracts.registerAgent(agent.name, `Ascend AI Agent: ${agent.name}`, 10);
-                console.log(`   ✅ Registered ${agent.name} (ID: ${i + 1})`);
-            } catch (e: any) {
-                console.log(`   ⚠️ Skipped ${agent.name}:`, e.message);
+    const myAddress = contracts.walletAddress.toLowerCase();
+
+    // Find agents we own
+    const ownedAgents: { id: number; name: string }[] = [];
+    for (let i = 1; i <= agentCount; i++) {
+        try {
+            const agentData = await contracts.getAgent(i);
+            if (agentData.owner.toLowerCase() === myAddress) {
+                ownedAgents.push({ id: i, name: agentData.name });
+            }
+        } catch (e) {
+            // Ignore missing agent ids
+        }
+    }
+
+    if (ownedAgents.length < agents.length) {
+        console.log(`\n🤖 Own ${ownedAgents.length} agents. Registering ${agents.length - ownedAgents.length} more...`);
+        // Register those that don't match our owned logic
+        let nextToRegister = 0;
+        for (const localAgent of agents) {
+            const alreadyOwned = ownedAgents.find(a => a.name === localAgent.name);
+            if (!alreadyOwned) {
+                try {
+                    console.log(`   Registering ${localAgent.name}...`);
+                    await contracts.registerAgent(localAgent.name, `Ascend AI Agent: ${localAgent.name}`, 10);
+                    const newId = await contracts.getAgentCount();
+                    ownedAgents.push({ id: newId, name: localAgent.name });
+                    console.log(`   ✅ Registered ${localAgent.name} (ID: ${newId})`);
+                } catch (e: any) {
+                    console.log(`   ⚠️ Failed to register ${localAgent.name}:`, e.message);
+                }
             }
         }
     }
+
+    // Map the actual on-chain IDs to our heuristic agents
+    for (const localAgent of agents) {
+        const matchingOwned = ownedAgents.find(a => a.name === localAgent.name) || ownedAgents.find(a => a.name.toLowerCase() === localAgent.name.toLowerCase());
+        if (matchingOwned) {
+            localAgent.id = matchingOwned.id;
+        } else if (ownedAgents.length >= agents.length) {
+            // Fallback: just sequentially assign if names don't match
+            localAgent.id = ownedAgents[agents.indexOf(localAgent)].id;
+        }
+    }
+
+    console.log(`\n🤖 Operating Agents: ${agents.map(a => `${a.name}(#${a.id})`).join(', ')}`);
 
     const config: RoundConfig = {
         commitDurationSecs: toPositiveInt(process.env.E2E_COMMIT_SECS, 60),
         revealDurationSecs: toPositiveInt(process.env.E2E_REVEAL_SECS, 30),
         roundDurationSecs: toPositiveInt(process.env.E2E_ROUND_SECS, 120),
-        entryFeeHbar: toNonNegativeNumber(process.env.E2E_ENTRY_FEE_HBAR, 0.5),
+        entryFeeHbar: toNonNegativeNumber(process.env.E2E_ENTRY_FEE_HBAR, 0),
     };
 
     const htsEnabled = process.env.E2E_HTS_REWARDS_ENABLED === "true";

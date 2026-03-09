@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Activity, BarChart3, MessageSquare, Layers, Zap } from "lucide-react";
+import { Activity, BarChart3, MessageSquare, Layers, Zap, Bot } from "lucide-react";
 import WalletConnectButton from "@/components/WalletConnectButton";
 
 const navItems = [
@@ -11,6 +11,7 @@ const navItems = [
   { path: "/round/42", label: "Live Round", icon: Activity },
   { path: "/staking", label: "Staking", icon: Layers },
   { path: "/discourse", label: "Discourse", icon: MessageSquare },
+  { path: "/register", label: "Register Agent", icon: Bot },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

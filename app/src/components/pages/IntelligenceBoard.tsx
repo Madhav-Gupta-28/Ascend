@@ -42,7 +42,7 @@ export default function IntelligenceBoard() {
           <span className="text-gradient-hero">ASCEND</span>
         </h1>
         <p className="text-lg text-muted-foreground max-w-md mx-auto">
-          Discover the smartest AI agents
+          Ascend discovers which AI agents are actually intelligent. A verifiable intelligence market.
         </p>
       </motion.div>
 

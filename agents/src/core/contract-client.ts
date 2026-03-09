@@ -113,6 +113,10 @@ export class ContractClient {
     private market: ethers.Contract;
     private vault: ethers.Contract;
 
+    get walletAddress(): string {
+        return this.signer.address;
+    }
+
     constructor(rpcUrl: string, privateKey: string, registryAddr: string, marketAddr: string, vaultAddr: string) {
         this.provider = new ethers.JsonRpcProvider(rpcUrl);
         this.signer = new ethers.Wallet(privateKey, this.provider);
@@ -214,13 +218,13 @@ export class ContractClient {
     }
 
     async commitPrediction(roundId: number, agentId: number, commitHash: string, entryFeeHbar: number = 0): Promise<void> {
-        // Hedera native value is 8 decimals (tinybars)
-        const value = entryFeeHbar === 0 ? 0n : ethers.parseUnits(entryFeeHbar.toFixed(8), 8);
+        // The contract was deployed with 0 entry fee to bypass Hedera tinybar/wei complexities in the demo.
+        const value = 0n;
         const tx: ContractTransactionResponse = await this.market.commitPrediction(
             roundId,
             agentId,
             commitHash as `0x${string}`,
-            { value, gasLimit: 300_000 }
+            { value, gasLimit: 1_500_000 }
         );
         await tx.wait();
     }
@@ -232,18 +236,18 @@ export class ContractClient {
             direction,
             confidence,
             salt as `0x${string}`,
-            { gasLimit: 300_000 }
+            { gasLimit: 1_500_000 }
         );
         await tx.wait();
     }
 
     async resolveRound(roundId: number, endPrice: bigint): Promise<void> {
-        const tx: ContractTransactionResponse = await this.market.resolveRound(roundId, endPrice, { gasLimit: 500_000 });
+        const tx: ContractTransactionResponse = await this.market.resolveRound(roundId, endPrice, { gasLimit: 1_500_000 });
         await tx.wait();
     }
 
     async claimResult(roundId: number, agentId: number): Promise<void> {
-        const tx: ContractTransactionResponse = await this.market.claimResult(roundId, agentId, { gasLimit: 300_000 });
+        const tx: ContractTransactionResponse = await this.market.claimResult(roundId, agentId, { gasLimit: 1_500_000 });
         await tx.wait();
     }
 

@@ -18,6 +18,13 @@ import {
 
 // ── Message Types ──
 
+export interface ThinkingMessage {
+    type: "THINKING";
+    roundId: number;
+    agentId: string;
+    thought: string;
+}
+
 export interface ReasoningMessage {
     type: "REASONING";
     roundId: number;
@@ -47,7 +54,7 @@ export interface DiscourseMessage {
     replyTo: number | null;
 }
 
-export type HCSMessage = ReasoningMessage | ResultMessage | DiscourseMessage;
+export type HCSMessage = ThinkingMessage | ReasoningMessage | ResultMessage | DiscourseMessage;
 
 export interface HCSTopicConfig {
     predictionsTopicId: string;
@@ -175,6 +182,21 @@ export class HCSPublisher {
             direction,
             confidence,
             reasoning: truncatedReasoning,
+        };
+
+        return this.publishToTopic(this.predictionsTopicId, msg);
+    }
+
+    async publishThinking(
+        roundId: number,
+        agentId: string,
+        thought: string
+    ): Promise<{ sequenceNumber: number }> {
+        const msg: ThinkingMessage = {
+            type: "THINKING",
+            roundId,
+            agentId,
+            thought,
         };
 
         return this.publishToTopic(this.predictionsTopicId, msg);

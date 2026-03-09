@@ -12,6 +12,8 @@ import * as dotenv from "dotenv";
 import * as path from "path";
 import * as fs from "fs";
 
+import { createHCSPublisher } from "../src/core/hcs-publisher.js";
+
 dotenv.config({ path: path.resolve(process.cwd(), "../.env") });
 dotenv.config();
 
@@ -20,6 +22,7 @@ const PK = process.env.DEPLOYER_PRIVATE_KEY!;
 
 const REGISTRY_ADDR = process.env.AGENT_REGISTRY_ADDRESS!;
 const MARKET_ADDR = process.env.PREDICTION_MARKET_ADDRESS!;
+const hcs = createHCSPublisher();
 const STAKING_ADDR = process.env.STAKING_VAULT_ADDRESS!;
 
 const MARKET_JSON = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "../contracts/out/PredictionMarket.sol/PredictionMarket.json"), "utf-8"));
@@ -83,11 +86,23 @@ async function main() {
 
     // Generate predictions for 4 agents
     const agentPredictions = [
-        { agentId: 1, name: "Sentinel", direction: 1, confidence: 72 }, // DOWN
-        { agentId: 2, name: "Pulse", direction: 0, confidence: 65 },    // UP  
-        { agentId: 3, name: "Meridian", direction: 0, confidence: 58 }, // UP
-        { agentId: 4, name: "Oracle", direction: 1, confidence: 80 },   // DOWN
+        { agentId: 1, name: "Sentinel", direction: 1, confidence: 72, thought: "Sentinel detected RSI oversold signal and bearish volume divergence" },
+        { agentId: 2, name: "Pulse", direction: 0, confidence: 65, thought: "Pulse detected positive sentiment spike across social channels" },
+        { agentId: 3, name: "Meridian", direction: 0, confidence: 58, thought: "Meridian mean reversion model indicates upward correction likely" },
+        { agentId: 4, name: "Oracle", direction: 1, confidence: 80, thought: "Oracle verified counter-trend behavior in historical analogies" },
     ];
+
+    // Step 0.5: Broadcast "Thinking" events to make timeline alive
+    console.log("🧠 Agents are thinking...");
+    for (const pred of agentPredictions) {
+        try {
+            await hcs.publishThinking(roundId, pred.name, pred.thought);
+            console.log(`  💭 ${pred.name} thinking: ${pred.thought}`);
+            await sleep(1500); // Visual stagger for the timeline
+        } catch (e: any) {
+            console.error(`  ❌ ${pred.name} thinking publish failed:`, e.reason || e.message);
+        }
+    }
 
     // Step 1: Commit predictions
     console.log("🔒 Committing predictions...");
@@ -112,8 +127,10 @@ async function main() {
     }
 
     // Step 2: Wait for commit phase to end
-    console.log(`\n⏳ Waiting ${commitDuration}s for commit phase to end...`);
-    await sleep((commitDuration + 2) * 1000);
+    console.log(`\n⏳ Waiting for commit phase to end...`);
+    // We already spent some time committing & thinking. Just sleep enough to cross the 60s mark from creation.
+    // Let's just sleep 15s which should safely put us into the reveal window without passing the reveal deadline.
+    await sleep(15000);
 
     // Step 3: Reveal predictions
     console.log("\n🔓 Revealing predictions...");

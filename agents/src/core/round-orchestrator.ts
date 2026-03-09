@@ -112,6 +112,14 @@ export class RoundOrchestrator {
         for (const agent of this.agents) {
             try {
                 console.log(`   [${agent.name}] Analyzing...`);
+
+                // Publish intermediate thinking state to HCS for live timeline
+                await this.hcs.publishThinking(
+                    roundId,
+                    agent.name,
+                    `${agent.name} is fetching market data and scanning technical indicators...`
+                );
+
                 const result = await agent.analyze(marketData);
                 const direction = result.direction === "UP" ? 0 : 1;
 

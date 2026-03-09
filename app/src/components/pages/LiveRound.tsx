@@ -7,10 +7,14 @@ import IntelligenceTimeline from "@/components/IntelligenceTimeline";
 import { ArrowUp, ArrowDown, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
+import { useHederaWallet } from "@/hooks/use-hedera-wallet";
+import { CONTRACT_ADDRESSES, PREDICTION_MARKET_ABI } from "@/lib/contracts";
+import { toast } from "sonner";
 
 export default function LiveRound() {
   const { data: round, isLoading: roundLoading } = useCurrentRound();
   const { data: agents = [] } = useAgents();
+  const { isConnected, executeContractFunction } = useHederaWallet();
 
   // Fetch real on-chain commitments for all registered agents for the current round
   const agentIds = agents.map(a => Number(a.id));
@@ -24,6 +28,7 @@ export default function LiveRound() {
   const defaultShowRevealed = isRevealPhase || isResolvedPhase;
 
   const [showRevealed, setShowRevealed] = useState(defaultShowRevealed);
+  const [claiming, setClaiming] = useState<Record<number, boolean>>({});
 
   const priceChange = (round?.endPrice && round?.endPrice > 0)
     ? round.endPrice - (round?.startPrice || 0)
@@ -157,6 +162,32 @@ export default function LiveRound() {
                 : null;
             const isRevealedDataVisible = showRevealed && commitment?.revealed;
 
+            const canClaim =
+              isResolvedPhase &&
+              !!commitment?.revealed &&
+              !commitment?.scored &&
+              isConnected;
+
+            const handleClaimResult = async () => {
+              const agentNumericId = Number(agent.id);
+              try {
+                setClaiming((prev) => ({ ...prev, [agentNumericId]: true }));
+                toast.loading("Claiming result on Hedera…", { id: `claim-result-${agentNumericId}` });
+                await executeContractFunction(
+                  CONTRACT_ADDRESSES.predictionMarket,
+                  PREDICTION_MARKET_ABI,
+                  "claimResult",
+                  [round.id, agentNumericId]
+                );
+                toast.success("Result claimed. CredScore updated.", { id: `claim-result-${agentNumericId}` });
+              } catch (err: any) {
+                console.error("Claim result failed:", err);
+                toast.error(`Claim failed: ${err?.message || "Unknown error"}`, { id: `claim-result-${agentNumericId}` });
+              } finally {
+                setClaiming((prev) => ({ ...prev, [agentNumericId]: false }));
+              }
+            };
+
             return (
               <motion.div
                 key={agent.id}
@@ -183,25 +214,39 @@ export default function LiveRound() {
                   )}
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Direction</div>
-                    {isRevealedDataVisible && directionStr ? (
-                      <span className={`inline-flex items-center gap-1 font-mono font-bold text-lg ${directionStr === "UP" ? "text-success" : "text-destructive"
-                        }`}>
-                        {directionStr === "UP" ? <ArrowUp className="h-5 w-5" /> : <ArrowDown className="h-5 w-5" />}
-                        {directionStr}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Direction</div>
+                      {isRevealedDataVisible && directionStr ? (
+                        <span className={`inline-flex items-center gap-1 font-mono font-bold text-lg ${directionStr === "UP" ? "text-success" : "text-destructive"
+                          }`}>
+                          {directionStr === "UP" ? <ArrowUp className="h-5 w-5" /> : <ArrowDown className="h-5 w-5" />}
+                          {directionStr}
+                        </span>
+                      ) : (
+                        <span className="font-mono text-lg font-bold text-muted-foreground">???</span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Confidence</div>
+                      <span className="font-mono text-lg font-bold text-foreground">
+                        {isRevealedDataVisible ? `${commitment?.confidence}%` : "—"}
                       </span>
-                    ) : (
-                      <span className="font-mono text-lg font-bold text-muted-foreground">???</span>
-                    )}
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Confidence</div>
-                    <span className="font-mono text-lg font-bold text-foreground">
-                      {isRevealedDataVisible ? `${commitment?.confidence}%` : "—"}
-                    </span>
-                  </div>
+
+                  {canClaim && (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={handleClaimResult}
+                        disabled={claiming[Number(agent.id)]}
+                        className="rounded-lg border border-success/40 bg-success/10 px-3 py-1.5 text-[11px] font-medium text-success hover:bg-success/20 transition-colors disabled:opacity-60"
+                      >
+                        {claiming[Number(agent.id)] ? "Claiming…" : "Claim Result"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             );

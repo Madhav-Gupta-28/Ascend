@@ -216,6 +216,23 @@ async function fetchTimelineEvents(limit: number): Promise<TimelineEvent[]> {
         const iso = consensusTimestampToIso(ts);
         const idBase = `${msg.topicId}-${msg.sequence_number}`;
 
+        if (parsed.type === "THINKING") {
+            const agentId = String(parsed.agentId ?? "").trim();
+            const agentName = agentDisplayName(agentId);
+            const thought = typeof parsed.thought === "string" ? parsed.thought : "";
+            events.push({
+                id: `${idBase}-thinking`,
+                eventType: "AGENT_ANALYSIS_STARTED",
+                message: thought ? thought : `${agentName} is analyzing market data`,
+                agentName,
+                roundId: parsed.roundId != null ? Number(parsed.roundId) : (parsed.round_id != null ? Number(parsed.round_id) : undefined),
+                timestamp: iso,
+                topicId: msg.topicId,
+                sequenceNumber: msg.sequence_number,
+                detail: "Thinking",
+            });
+        }
+
         if (parsed.type === "REASONING") {
             const agentId = String(parsed.agentId ?? "").trim();
             const agentName = agentDisplayName(agentId);
