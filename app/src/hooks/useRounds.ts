@@ -49,7 +49,8 @@ export function useCurrentRound() {
         },
         refetchInterval: (query) => {
             const state = query.state.data as Round | null;
-            if (state?.status === 2 || state?.status === 3) return false;
+            // Keep polling at low frequency even after resolution so the UI can discover the next round.
+            if (state?.status === 2 || state?.status === 3) return 15000;
             return (state?.status === 0 || state?.status === 1) ? 5000 : 15000;
         },
     });
