@@ -91,6 +91,12 @@ contract PredictionMarket is Ownable {
         bool correct,
         int256 credScoreDelta
     );
+    event RewardPoolWithdrawn(
+        uint256 indexed roundId,
+        address indexed to,
+        uint256 amount,
+        uint256 remainingRewardPool
+    );
     event RoundCancelled(uint256 indexed roundId);
 
     // ── Constructor ──
@@ -314,6 +320,28 @@ contract PredictionMarket is Ownable {
         emit RoundCancelled(roundId);
     }
 
+    /// @notice Withdraw reward pool funds from a resolved round
+    /// @dev Allows orchestrator reward routing to be funded by round entry fees
+    ///      instead of the operator wallet balance.
+    function withdrawRewardPool(
+        uint256 roundId,
+        uint256 amount,
+        address payable to
+    ) external onlyOwner {
+        Round storage round = rounds[roundId];
+        require(round.status == RoundStatus.Resolved, "Round not resolved");
+        require(to != address(0), "Invalid recipient");
+        require(amount > 0, "Amount must be > 0");
+        require(amount <= round.rewardPool, "Insufficient reward pool");
+
+        round.rewardPool -= amount;
+
+        (bool sent, ) = to.call{value: amount}("");
+        require(sent, "HBAR transfer failed");
+
+        emit RewardPoolWithdrawn(roundId, to, amount, round.rewardPool);
+    }
+
     // ══════════════════════════════════════════
     // VIEW FUNCTIONS (free via eth_call)
     // ══════════════════════════════════════════
@@ -382,5 +410,9 @@ contract PredictionMarket is Ownable {
     ) external view returns (Direction) {
         require(rounds[roundId].status == RoundStatus.Resolved, "Not resolved");
         return rounds[roundId].outcome;
+    }
+
+    function getRoundRewardPool(uint256 roundId) external view returns (uint256) {
+        return rounds[roundId].rewardPool;
     }
 }

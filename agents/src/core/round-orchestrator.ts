@@ -441,78 +441,111 @@ export class RoundOrchestrator {
         const winners = revealedPredictions.filter(
             (p) => (p.direction === 0 ? "UP" : "DOWN") === outcome,
         );
-        const winnerIds = new Set(winners.map((winner) => winner.agentId));
-        const losers = committedPredictions.filter((p) => !winnerIds.has(p.agentId));
+        const onchainRound = await this.contracts.getRound(roundId);
+        const participantCount = onchainRound.participantCount;
+        const losersCount = Math.max(0, participantCount - winners.length);
+        const rewardPoolBefore = await this.contracts.getRoundRewardPool(roundId);
+        const treasuryAddress = process.env.ASCEND_TREASURY_ADDRESS?.trim();
 
-        if (winners.length > 0 && losers.length > 0 && config.entryFeeHbar > 0) {
-            // Total forfeited HBAR from incorrect agents
-            const totalForfeited = losers.length * config.entryFeeHbar;
-            // Split equally among correct agents
-            const profitPerWinner = totalForfeited / winners.length;
-            const stakerCutPerWinner = profitPerWinner * 0.70;
-            const operatorCutPerWinner = profitPerWinner * 0.20;
-            const treasuryCutPerWinner = profitPerWinner * 0.10;
-            const treasuryAddress = process.env.ASCEND_TREASURY_ADDRESS?.trim();
+        if (rewardPoolBefore === 0n || participantCount === 0) {
+            console.log("   No reward pool funds available for this round.");
+        } else {
+            // Pull funds from PredictionMarket so distribution is sourced from round fees.
+            await this.contracts.withdrawRewardPool(roundId, rewardPoolBefore);
+            console.log(
+                `   Withdrew ${this.formatTinybarAsHbar(rewardPoolBefore)} from PredictionMarket.rewardPool`,
+            );
 
-            let treasuryTransferred = 0;
-            if (treasuryAddress && treasuryCutPerWinner > 0) {
-                const treasuryAmount = treasuryCutPerWinner * winners.length;
-                try {
-                    await this.contracts.transferHbar(treasuryAddress, treasuryAmount);
-                    treasuryTransferred = treasuryAmount;
-                } catch (err: any) {
-                    console.error(
-                        `   [Treasury] ❌ Failed to transfer ${treasuryAmount.toFixed(8)} HBAR: ${err.message}`,
-                    );
-                }
-            }
+            let protocolRemainder = rewardPoolBefore;
 
-            for (const winner of winners) {
-                try {
-                    const totalStakedOnWinner = Number(
-                        await this.contracts.getTotalStakedOnAgent(winner.agentId),
-                    );
-                    if (stakerCutPerWinner > 0 && totalStakedOnWinner > 0) {
-                        await this.contracts.depositReward(
-                            winner.agentId,
-                            stakerCutPerWinner.toFixed(8),
-                        );
-                        console.log(
-                            `   [${winner.agentName}] Routed ${stakerCutPerWinner.toFixed(4)} HBAR to Staking Vault`,
-                        );
-                    } else {
-                        console.log(
-                            `   [${winner.agentName}] No active stakers; skipped vault reward deposit`,
-                        );
-                    }
-                } catch (err: any) {
-                    console.error(`   [${winner.agentName}] ❌ Failed to route reward: ${err.message}`);
-                }
+            if (winners.length > 0 && losersCount > 0) {
+                // Forfeited share comes from incorrect participants, scaled from actual pool.
+                const forfeitedPool =
+                    (rewardPoolBefore * BigInt(losersCount)) / BigInt(participantCount);
+                const perWinner = forfeitedPool / BigInt(winners.length);
+                const stakerCutPerWinner = (perWinner * 70n) / 100n;
+                const operatorCutPerWinner = (perWinner * 20n) / 100n;
+                const treasuryCutPerWinner = (perWinner * 10n) / 100n;
 
-                if (operatorCutPerWinner > 0) {
+                for (const winner of winners) {
                     try {
-                        const owner = (await this.contracts.getAgent(winner.agentId)).owner;
-                        await this.contracts.transferHbar(owner, operatorCutPerWinner);
-                        console.log(
-                            `   [${winner.agentName}] Routed ${operatorCutPerWinner.toFixed(4)} HBAR to agent operator`,
+                        const totalStakedOnWinner = await this.contracts.getTotalStakedOnAgentRaw(
+                            winner.agentId,
                         );
+                        if (stakerCutPerWinner > 0n && totalStakedOnWinner > 0n) {
+                            await this.contracts.depositRewardRaw(
+                                winner.agentId,
+                                stakerCutPerWinner,
+                            );
+                            protocolRemainder -= stakerCutPerWinner;
+                            console.log(
+                                `   [${winner.agentName}] Routed ${this.formatTinybarAsHbar(stakerCutPerWinner)} to Staking Vault`,
+                            );
+                        } else if (stakerCutPerWinner > 0n) {
+                            console.log(
+                                `   [${winner.agentName}] No active stakers; staker share retained for protocol sweep`,
+                            );
+                        }
                     } catch (err: any) {
                         console.error(
-                            `   [${winner.agentName}] ❌ Failed to transfer operator cut: ${err.message}`,
+                            `   [${winner.agentName}] ❌ Failed to route staker share: ${err.message}`,
                         );
                     }
+
+                    if (operatorCutPerWinner > 0n) {
+                        try {
+                            const owner = (await this.contracts.getAgent(winner.agentId)).owner;
+                            await this.contracts.transferRaw(owner, operatorCutPerWinner);
+                            protocolRemainder -= operatorCutPerWinner;
+                            console.log(
+                                `   [${winner.agentName}] Routed ${this.formatTinybarAsHbar(operatorCutPerWinner)} to agent operator`,
+                            );
+                        } catch (err: any) {
+                            console.error(
+                                `   [${winner.agentName}] ❌ Failed to transfer operator cut: ${err.message}`,
+                            );
+                        }
+                    }
+
+                    if (treasuryCutPerWinner > 0n && treasuryAddress) {
+                        try {
+                            await this.contracts.transferRaw(
+                                treasuryAddress,
+                                treasuryCutPerWinner,
+                            );
+                            protocolRemainder -= treasuryCutPerWinner;
+                        } catch (err: any) {
+                            console.error(
+                                `   [Treasury] ❌ Failed to transfer winner treasury cut: ${err.message}`,
+                            );
+                        }
+                    }
                 }
+            } else {
+                console.log(
+                    "   No forfeited pool to split (either no winners or no losers).",
+                );
             }
 
-            if (treasuryAddress) {
-                console.log(
-                    `   [Treasury] ${treasuryTransferred > 0 ? `Routed ${treasuryTransferred.toFixed(4)} HBAR` : "No transfer"} (${treasuryAddress})`,
-                );
-            } else {
-                console.log("   [Treasury] ASCEND_TREASURY_ADDRESS not set; treasury share left with operator wallet");
+            if (protocolRemainder > 0n) {
+                if (treasuryAddress) {
+                    try {
+                        await this.contracts.transferRaw(treasuryAddress, protocolRemainder);
+                        console.log(
+                            `   [Treasury] Routed protocol remainder ${this.formatTinybarAsHbar(protocolRemainder)} (${treasuryAddress})`,
+                        );
+                        protocolRemainder = 0n;
+                    } catch (err: any) {
+                        console.error(
+                            `   [Treasury] ❌ Failed to transfer protocol remainder: ${err.message}`,
+                        );
+                    }
+                } else {
+                    console.log(
+                        `   [Treasury] ASCEND_TREASURY_ADDRESS not set; protocol remainder kept by operator (${this.formatTinybarAsHbar(protocolRemainder)})`,
+                    );
+                }
             }
-        } else {
-            console.log("   No rewards to route (either no winners, no losers, or free round).");
         }
 
         // ── DONE ──
@@ -530,6 +563,14 @@ export class RoundOrchestrator {
 
     private sleep(ms: number): Promise<void> {
         return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    private formatTinybarAsHbar(value: bigint): string {
+        const negative = value < 0n;
+        const abs = negative ? -value : value;
+        const whole = abs / 100_000_000n;
+        const fraction = (abs % 100_000_000n).toString().padStart(8, "0");
+        return `${negative ? "-" : ""}${whole}.${fraction} HBAR`;
     }
 
     private async resolveRoundWithRetry(roundId: number, endPrice: bigint): Promise<void> {

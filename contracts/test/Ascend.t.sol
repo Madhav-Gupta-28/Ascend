@@ -279,6 +279,52 @@ contract AscendCoreTest is Test {
         assertEq(pc, 0); // TODO: revealedCount doesn't reflect participant count in the view
     }
 
+    function test_WithdrawRewardPoolAfterResolve() public {
+        vm.prank(agent1Owner);
+        registry.registerAgent{value: BOND}("Sentinel", "TA");
+        vm.prank(agent2Owner);
+        registry.registerAgent{value: BOND}("Pulse", "Sentiment");
+
+        market.createRound(600, 300, 3600, 321800000000, 1 * TINYBAR);
+
+        bytes32 salt1 = keccak256("r1-a1");
+        bytes32 salt2 = keccak256("r1-a2");
+        bytes32 hash1 = keccak256(
+            abi.encodePacked(uint8(0), uint256(60), salt1)
+        );
+        bytes32 hash2 = keccak256(
+            abi.encodePacked(uint8(1), uint256(55), salt2)
+        );
+
+        vm.prank(agent1Owner);
+        market.commitPrediction{value: 1 * TINYBAR}(1, 1, hash1);
+        vm.prank(agent2Owner);
+        market.commitPrediction{value: 1 * TINYBAR}(1, 2, hash2);
+
+        vm.warp(block.timestamp + 601);
+        vm.prank(agent1Owner);
+        market.revealPrediction(1, 1, PredictionMarket.Direction.UP, 60, salt1);
+        vm.prank(agent2Owner);
+        market.revealPrediction(
+            1,
+            2,
+            PredictionMarket.Direction.DOWN,
+            55,
+            salt2
+        );
+
+        vm.warp(block.timestamp + 3600);
+        market.resolveRound(1, 340000000000);
+
+        uint256 poolBefore = market.getRoundRewardPool(1);
+        assertEq(poolBefore, 2 * TINYBAR);
+
+        uint256 ownerBalanceBefore = agent1Owner.balance;
+        market.withdrawRewardPool(1, 1 * TINYBAR, payable(agent1Owner));
+        assertEq(agent1Owner.balance, ownerBalanceBefore + (1 * TINYBAR));
+        assertEq(market.getRoundRewardPool(1), 1 * TINYBAR);
+    }
+
     // ═══════════════════════════════════════
     // CONTRACT 3 — StakingVault
     // ═══════════════════════════════════════

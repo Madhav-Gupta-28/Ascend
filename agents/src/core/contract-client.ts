@@ -24,8 +24,10 @@ const PREDICTION_MARKET_ABI = [
     "function revealPrediction(uint256 roundId, uint256 agentId, uint8 direction, uint256 confidence, bytes32 salt) external",
     "function resolveRound(uint256 roundId, uint256 endPrice) external",
     "function claimResult(uint256 roundId, uint256 agentId) external",
+    "function withdrawRewardPool(uint256 roundId, uint256 amount, address to) external",
     "function cancelRound(uint256 roundId) external",
     "function getRound(uint256 roundId) external view returns (uint256 startPrice, uint256 endPrice, uint64 commitDeadline, uint64 revealDeadline, uint64 resolveAfter, uint256 entryFee, uint8 status, uint8 outcome, uint8 participantCount, uint8 revealedCount)",
+    "function getRoundRewardPool(uint256 roundId) external view returns (uint256)",
     "function getCommitment(uint256 roundId, uint256 agentId) external view returns (bool committed, bool revealed, bool scored, uint8 direction, uint256 confidence)",
     "function getRoundCount() external view returns (uint256)",
     "function isRoundResolved(uint256 roundId) external view returns (bool)",
@@ -276,6 +278,18 @@ export class ContractClient {
         await tx.wait();
     }
 
+    async withdrawRewardPool(roundId: number, amount: bigint, to?: string): Promise<void> {
+        if (amount <= 0n) return;
+        const recipient = to || this.signerAddress;
+        const tx: ContractTransactionResponse = await this.market.withdrawRewardPool(
+            roundId,
+            amount,
+            recipient,
+            { gasLimit: 500_000 },
+        );
+        await tx.wait();
+    }
+
     async getRound(roundId: number): Promise<RoundData> {
         const round = await this.market.getRound(roundId);
         return {
@@ -315,6 +329,10 @@ export class ContractClient {
         return Number(await this.market.getRoundOutcome(roundId));
     }
 
+    async getRoundRewardPool(roundId: number): Promise<bigint> {
+        return BigInt(await this.market.getRoundRewardPool(roundId));
+    }
+
     async stake(agentId: number, amountHbar: number): Promise<void> {
         const tx: ContractTransactionResponse = await this.vault.stake(
             agentId,
@@ -346,6 +364,15 @@ export class ContractClient {
         await tx.wait();
     }
 
+    async depositRewardRaw(agentId: number, amount: bigint): Promise<void> {
+        if (amount <= 0n) return;
+        const tx: ContractTransactionResponse = await this.vault.depositReward(
+            agentId,
+            { value: amount, gasLimit: 200_000 },
+        );
+        await tx.wait();
+    }
+
     async claimReward(agentId: number): Promise<void> {
         const tx: ContractTransactionResponse = await this.vault.claimReward(agentId, { gasLimit: 300_000 });
         await tx.wait();
@@ -359,6 +386,10 @@ export class ContractClient {
     async getTotalStakedOnAgent(agentId: number): Promise<string> {
         const tvl = await this.vault.getTotalStakedOnAgent(agentId);
         return ethers.formatUnits(tvl, 8);
+    }
+
+    async getTotalStakedOnAgentRaw(agentId: number): Promise<bigint> {
+        return BigInt(await this.vault.getTotalStakedOnAgent(agentId));
     }
 
     // Backward-compatible wrapper used by older callers.
@@ -395,6 +426,16 @@ export class ContractClient {
         const tx = await this.signer.sendTransaction({
             to,
             value: ethers.parseEther(amountHbar.toString()),
+            gasLimit: 30_000,
+        });
+        await tx.wait();
+    }
+
+    async transferRaw(to: string, amount: bigint): Promise<void> {
+        if (amount <= 0n) return;
+        const tx = await this.signer.sendTransaction({
+            to,
+            value: amount,
             gasLimit: 30_000,
         });
         await tx.wait();
