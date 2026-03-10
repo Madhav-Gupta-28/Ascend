@@ -5,9 +5,9 @@ import { useAgents } from "@/hooks/useAgents";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 import { CONTRACT_ADDRESSES, STAKING_VAULT_ABI } from "@/lib/contracts";
 import { useHederaWallet } from "@/hooks/use-hedera-wallet";
-import { ethers } from "ethers";
 import { toast } from "sonner";
 import { parseHbar } from "@/lib/hedera";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface StakingFormProps {
   agentId?: string;
@@ -20,6 +20,7 @@ export default function StakingForm({ agentId, onClose }: StakingFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { data: agents = [] } = useAgents();
   const { isConnected, executeContractFunction } = useHederaWallet();
+  const queryClient = useQueryClient();
 
   const agent = agents.find(a => String(a.id) === selectedAgent);
   const directoryMetadata = agent ? getAgentDirectoryEntry(agent.name) : null;
@@ -39,7 +40,7 @@ export default function StakingForm({ agentId, onClose }: StakingFormProps) {
 
       toast.loading("Sending transaction to wallet...", { id: "stake-tx" });
 
-      const receipt = await executeContractFunction(
+      await executeContractFunction(
         CONTRACT_ADDRESSES.stakingVault,
         STAKING_VAULT_ABI,
         "stake",
@@ -47,6 +48,11 @@ export default function StakingForm({ agentId, onClose }: StakingFormProps) {
         amountInTinybars
       );
 
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["stakingPortfolio"] }),
+        queryClient.invalidateQueries({ queryKey: ["stakingTVL"] }),
+        queryClient.invalidateQueries({ queryKey: ["agents"] }),
+      ]);
       toast.success("Successfully staked on AI Agent!", { id: "stake-tx" });
       onClose();
     } catch (err: any) {

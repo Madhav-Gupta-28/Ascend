@@ -9,11 +9,13 @@ import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 import { CONTRACT_ADDRESSES, STAKING_VAULT_ABI } from "@/lib/contracts";
 import { formatHbar } from "@/lib/hedera";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function StakingDashboard() {
   const [showStakeModal, setShowStakeModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState<Record<string, boolean>>({});
   const { selectedAccountId, executeContractFunction } = useHederaWallet();
+  const queryClient = useQueryClient();
 
   const { data: portfolio, isLoading: isPortfolioLoading } = useStakingPortfolio();
   const { data: agents = [] } = useAgents();
@@ -43,6 +45,11 @@ export default function StakingDashboard() {
         "unstake",
         [agentId, amountRaw.toString()]
       );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["stakingPortfolio"] }),
+        queryClient.invalidateQueries({ queryKey: ["stakingTVL"] }),
+        queryClient.invalidateQueries({ queryKey: ["agents"] }),
+      ]);
       toast.success("Successfully unstaked HBAR!", { id: `unstake-${agentId}` });
     } catch (err: any) {
       console.error("Unstaking failed:", err);
@@ -63,6 +70,11 @@ export default function StakingDashboard() {
         "claimReward",
         [agentId]
       );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["stakingPortfolio"] }),
+        queryClient.invalidateQueries({ queryKey: ["stakingTVL"] }),
+        queryClient.invalidateQueries({ queryKey: ["agents"] }),
+      ]);
       toast.success("Successfully claimed rewards!", { id: `claim-${agentId}` });
     } catch (err: any) {
       console.error("Claiming failed:", err);

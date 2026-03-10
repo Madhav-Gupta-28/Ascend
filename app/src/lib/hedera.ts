@@ -11,10 +11,12 @@ import { ethers } from "ethers";
 export const HEDERA_NETWORK = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
 
 // ── Utility Functions (HBAR / Tinybar) ──
+// Hedera contracts return HBAR-denominated balances in tinybar units (1 HBAR = 1e8 tinybar).
 export function formatHbar(tinybars: bigint | string | number): string {
     return ethers.formatUnits(tinybars, 8);
 }
 
+// ContractExecuteTransaction#setPayableAmount expects tinybars.
 export function parseHbar(hbarAmount: string): bigint {
     return ethers.parseUnits(hbarAmount, 8);
 }

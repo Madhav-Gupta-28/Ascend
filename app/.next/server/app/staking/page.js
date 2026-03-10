@@ -2,7 +2,7 @@ var R=require("../../chunks/ssr/[turbopack]_runtime.js")("server/app/staking/pag
 R.c("server/chunks/ssr/[root-of-the-server]__dc4043b0._.js")
 R.c("server/chunks/ssr/node_modules_next_dist_4b63a0e1._.js")
 R.c("server/chunks/ssr/_00f6f138._.js")
-R.c("server/chunks/ssr/[root-of-the-server]__f9477072._.js")
+R.c("server/chunks/ssr/[root-of-the-server]__812a9c72._.js")
 R.c("server/chunks/ssr/node_modules_next_dist_174ae28d._.js")
 R.c("server/chunks/ssr/node_modules_next_dist_f9713a08._.js")
 R.c("server/chunks/ssr/node_modules_next_dist_client_components_builtin_global-error_ece394eb.js")
@@ -11,5 +11,5 @@ R.c("server/chunks/ssr/src_app_not-found_tsx_0f6131ce._.js")
 R.c("server/chunks/ssr/node_modules_next_dist_client_components_2fffaa3a._.js")
 R.c("server/chunks/ssr/node_modules_next_dist_client_components_builtin_unauthorized_15817684.js")
 R.c("server/chunks/ssr/_next-internal_server_app_staking_page_actions_22fc83a5.js")
-R.m(5908)
-module.exports=R.m(5908).exports
+R.m(305908)
+module.exports=R.m(305908).exports

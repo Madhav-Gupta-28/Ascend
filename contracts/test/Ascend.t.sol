@@ -18,7 +18,8 @@ contract AscendCoreTest is Test {
     address staker1 = makeAddr("staker1");
     address staker2 = makeAddr("staker2");
 
-    uint256 constant BOND = 10 ether;
+    uint256 constant TINYBAR = 100_000_000;
+    uint256 constant BOND = 10 * TINYBAR;
 
     function setUp() public {
         registry = new AgentRegistry();
@@ -60,7 +61,7 @@ contract AscendCoreTest is Test {
     function test_RegisterAgent_InsufficientBond() public {
         vm.prank(agent1Owner);
         vm.expectRevert("Bond too low");
-        registry.registerAgent{value: 1 ether}("Sentinel", "desc");
+        registry.registerAgent{value: 1 * TINYBAR}("Sentinel", "desc");
     }
 
     function test_RegisterAgent_DoubleRegistration() public {
@@ -260,18 +261,18 @@ contract AscendCoreTest is Test {
         vm.prank(agent1Owner);
         registry.registerAgent{value: BOND}("Sentinel", "TA");
 
-        market.createRound(600, 300, 3600, 321800000000, 1 ether);
+        market.createRound(600, 300, 3600, 321800000000, 1 * TINYBAR);
 
         bytes32 hash = keccak256("commit");
 
         // Fails with insufficient fee
         vm.prank(agent1Owner);
         vm.expectRevert("Insufficient entry fee");
-        market.commitPrediction{value: 0.5 ether}(1, 1, hash);
+        market.commitPrediction{value: 50_000_000}(1, 1, hash);
 
         // Succeeds with enough fee
         vm.prank(agent1Owner);
-        market.commitPrediction{value: 1 ether}(1, 1, hash);
+        market.commitPrediction{value: 1 * TINYBAR}(1, 1, hash);
 
         // Reward pool updated
         (, , , , , , , , , uint8 pc) = market.getRound(1);
@@ -288,23 +289,23 @@ contract AscendCoreTest is Test {
 
         // Stake 5 HBAR
         vm.prank(staker1);
-        vault.stake{value: 5 ether}(1);
+        vault.stake{value: 5 * TINYBAR}(1);
 
         (uint256 amt, ) = vault.getUserStake(1, staker1);
-        assertEq(amt, 5 ether);
-        assertEq(vault.getTotalStakedOnAgent(1), 5 ether);
-        assertEq(vault.getTVL(), 5 ether);
-        assertEq(registry.getAgent(1).totalStaked, 5 ether);
+        assertEq(amt, 5 * TINYBAR);
+        assertEq(vault.getTotalStakedOnAgent(1), 5 * TINYBAR);
+        assertEq(vault.getTVL(), 5 * TINYBAR);
+        assertEq(registry.getAgent(1).totalStaked, 5 * TINYBAR);
 
         // Unstake 3 HBAR
         uint256 balBefore = staker1.balance;
         vm.prank(staker1);
-        vault.unstake(1, 3 ether);
+        vault.unstake(1, 3 * TINYBAR);
 
         (amt, ) = vault.getUserStake(1, staker1);
-        assertEq(amt, 2 ether);
-        assertEq(staker1.balance, balBefore + 3 ether);
-        assertEq(vault.getTVL(), 2 ether);
+        assertEq(amt, 2 * TINYBAR);
+        assertEq(staker1.balance, balBefore + 3 * TINYBAR);
+        assertEq(vault.getTVL(), 2 * TINYBAR);
     }
 
     function test_UnstakeInsufficient() public {
@@ -312,11 +313,11 @@ contract AscendCoreTest is Test {
         registry.registerAgent{value: BOND}("Sentinel", "TA");
 
         vm.prank(staker1);
-        vault.stake{value: 5 ether}(1);
+        vault.stake{value: 5 * TINYBAR}(1);
 
         vm.prank(staker1);
         vm.expectRevert("Insufficient stake");
-        vault.unstake(1, 10 ether);
+        vault.unstake(1, 10 * TINYBAR);
     }
 
     function test_StakeOnInactiveAgent() public {
@@ -327,7 +328,7 @@ contract AscendCoreTest is Test {
 
         vm.prank(staker1);
         vm.expectRevert("Agent not active");
-        vault.stake{value: 5 ether}(1);
+        vault.stake{value: 5 * TINYBAR}(1);
     }
 
     function test_RewardDistribution() public {
@@ -336,34 +337,34 @@ contract AscendCoreTest is Test {
 
         // Two stakers: staker1 = 3 HBAR, staker2 = 7 HBAR → 30%, 70%
         vm.prank(staker1);
-        vault.stake{value: 3 ether}(1);
+        vault.stake{value: 3 * TINYBAR}(1);
         vm.prank(staker2);
-        vault.stake{value: 7 ether}(1);
+        vault.stake{value: 7 * TINYBAR}(1);
 
         // Operator deposits 10 HBAR reward
-        vault.depositReward{value: 10 ether}(1);
+        vault.depositReward{value: 10 * TINYBAR}(1);
 
         // staker1 claims: 30% of 10 = 3 HBAR
         uint256 pending1 = vault.getPendingReward(1, staker1);
-        assertEq(pending1, 3 ether);
+        assertEq(pending1, 3 * TINYBAR);
 
         uint256 bal1Before = staker1.balance;
         vm.prank(staker1);
         vault.claimReward(1);
-        assertEq(staker1.balance, bal1Before + 3 ether);
+        assertEq(staker1.balance, bal1Before + 3 * TINYBAR);
 
         // staker2 claims: 7/10 of remaining 7 HBAR = 7 HBAR
         uint256 bal2Before = staker2.balance;
         vm.prank(staker2);
         vault.claimReward(1);
-        assertEq(staker2.balance, bal2Before + 7 ether);
+        assertEq(staker2.balance, bal2Before + 7 * TINYBAR);
     }
 
     function test_NoRewardWithoutStake() public {
         vm.prank(agent1Owner);
         registry.registerAgent{value: BOND}("Sentinel", "TA");
 
-        vault.depositReward{value: 10 ether}(1);
+        vault.depositReward{value: 10 * TINYBAR}(1);
 
         vm.prank(staker1);
         vm.expectRevert("No rewards available");

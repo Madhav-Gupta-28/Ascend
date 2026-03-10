@@ -9,6 +9,7 @@ import { createHTSClient } from "../src/core/hts-client.js";
 import {
     buildHeuristicAgentProfiles,
     distributeHtsWinnerRewards,
+    ensureOwnedAgentProfiles,
 } from "./lib/round-runtime.js";
 
 dotenv.config({ path: path.resolve(process.cwd(), "../.env") });
@@ -31,14 +32,16 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function main() {
-    const commitDurationSecs = toPositiveInt(process.env.ORCHESTRATOR_COMMIT_SECS, 180);
-    const revealDurationSecs = toPositiveInt(process.env.ORCHESTRATOR_REVEAL_SECS, 60);
-    const roundDurationSecs = toPositiveInt(process.env.ORCHESTRATOR_ROUND_SECS, 300);
+    const commitDurationSecs = toPositiveInt(process.env.ORCHESTRATOR_COMMIT_SECS, 45);
+    const revealDurationSecs = toPositiveInt(process.env.ORCHESTRATOR_REVEAL_SECS, 15);
+    const roundDurationSecs = toPositiveInt(process.env.ORCHESTRATOR_ROUND_SECS, 75);
     const entryFeeHbar = toNonNegativeNumber(process.env.ORCHESTRATOR_ENTRY_FEE_HBAR, 1);
     const cooldownSecs = toPositiveInt(process.env.ORCHESTRATOR_COOLDOWN_SECS, 15);
 
     const htsEnabled = process.env.HTS_REWARDS_ENABLED === "true";
     const rewardPerWinnerTokens = process.env.HTS_REWARD_PER_WINNER_TOKENS || "0";
+    const serialTxSecs = toPositiveInt(process.env.ORCHESTRATOR_SERIAL_TX_SECS, 6);
+    const forceAllAgents = process.env.ORCHESTRATOR_FORCE_ALL_AGENTS === "true";
 
     const config: RoundConfig = {
         commitDurationSecs,
@@ -50,7 +53,20 @@ async function main() {
     const contracts = createContractClient();
     const hcs = createHCSPublisher();
     const dataCollector = new DataCollector(process.env.COINGECKO_API_KEY);
-    const agents = buildHeuristicAgentProfiles();
+    let agents = await ensureOwnedAgentProfiles(
+        contracts,
+        buildHeuristicAgentProfiles(),
+    );
+    const maxSequentialAgents = Math.max(
+        1,
+        Math.floor(Math.max(1, revealDurationSecs - 2) / serialTxSecs),
+    );
+    if (!forceAllAgents && agents.length > maxSequentialAgents) {
+        console.log(
+            `[orchestrator] Trimming active agents from ${agents.length} to ${maxSequentialAgents} for ${revealDurationSecs}s reveal window (single signer mode).`,
+        );
+        agents = agents.slice(0, maxSequentialAgents);
+    }
     const orchestrator = new RoundOrchestrator(contracts, hcs, dataCollector, agents);
 
     const htsClient = htsEnabled ? createHTSClient() : null;

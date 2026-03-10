@@ -4,8 +4,13 @@
   "/agent/[id]/page": "/agent/[id]",
   "/api/discourse/ask/route": "/api/discourse/ask",
   "/api/discourse/messages/route": "/api/discourse/messages",
+  "/api/protocol/agent/[id]/signals/route": "/api/protocol/agent/[id]/signals",
+  "/api/protocol/top-agents/route": "/api/protocol/top-agents",
+  "/apis/page": "/apis",
+  "/developers/page": "/developers",
   "/discourse/page": "/discourse",
   "/page": "/",
+  "/register/page": "/register",
   "/round/[id]/page": "/round/[id]",
   "/staking/page": "/staking"
 }

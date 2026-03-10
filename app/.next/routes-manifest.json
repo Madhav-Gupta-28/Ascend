@@ -30,6 +30,14 @@
       "namedRegex": "^/agent/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/api/protocol/agent/[id]/signals",
+      "regex": "^/api/protocol/agent/([^/]+?)/signals(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/protocol/agent/(?<nxtPid>[^/]+?)/signals(?:/)?$"
+    },
+    {
       "page": "/round/[id]",
       "regex": "^/round/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -70,10 +78,34 @@
       "namedRegex": "^/api/discourse/messages(?:/)?$"
     },
     {
+      "page": "/api/protocol/top-agents",
+      "regex": "^/api/protocol/top\\-agents(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/protocol/top\\-agents(?:/)?$"
+    },
+    {
+      "page": "/apis",
+      "regex": "^/apis(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/apis(?:/)?$"
+    },
+    {
+      "page": "/developers",
+      "regex": "^/developers(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/developers(?:/)?$"
+    },
+    {
       "page": "/discourse",
       "regex": "^/discourse(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/discourse(?:/)?$"
+    },
+    {
+      "page": "/register",
+      "regex": "^/register(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/register(?:/)?$"
     },
     {
       "page": "/staking",

@@ -10,6 +10,7 @@ import { MirrorNodeClient } from "../src/core/mirror-node-client.js";
 import {
     buildHeuristicAgentProfiles,
     distributeHtsWinnerRewards,
+    ensureOwnedAgentProfiles,
 } from "./lib/round-runtime.js";
 
 dotenv.config({ path: path.resolve(process.cwd(), "../.env") });
@@ -27,6 +28,12 @@ function toNonNegativeNumber(input: string | undefined, fallback: number): numbe
     return parsed;
 }
 
+function toNonNegativeInt(input: string | undefined, fallback: number): number {
+    const parsed = Number(input ?? "");
+    if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+    return Math.floor(parsed);
+}
+
 async function verifyHcsMessages(roundId: number): Promise<void> {
     const predictionsTopicId =
         process.env.ASCEND_PREDICTIONS_TOPIC_ID || process.env.ASCEND_ROUNDS_TOPIC_ID;
@@ -42,81 +49,42 @@ async function verifyHcsMessages(roundId: number): Promise<void> {
     }
 
     const mirror = new MirrorNodeClient(process.env.HEDERA_MIRROR_NODE);
-    const [predictionMessages, resultMessages] = await Promise.all([
-        mirror.getTopicMessages(predictionsTopicId, { limit: 200, order: "desc" }),
-        mirror.getTopicMessages(resultsTopicId, { limit: 200, order: "desc" }),
-    ]);
+    const retries = 12;
+    const delayMs = 2500;
 
-    const reasoningCount = predictionMessages.filter(
-        (m) => m.data?.type === "REASONING" && m.data?.roundId === roundId,
-    ).length;
-    const hasResult = resultMessages.some(
-        (m) => m.data?.type === "RESULT" && m.data?.roundId === roundId,
+    for (let i = 0; i < retries; i++) {
+        const [predictionMessages, resultMessages] = await Promise.all([
+            mirror.getTopicMessages(predictionsTopicId, { limit: 200, order: "desc" }),
+            mirror.getTopicMessages(resultsTopicId, { limit: 200, order: "desc" }),
+        ]);
+
+        const reasoningCount = predictionMessages.filter(
+            (m) => m.data?.type === "REASONING" && m.data?.roundId === roundId,
+        ).length;
+        const hasResult = resultMessages.some(
+            (m) => m.data?.type === "RESULT" && m.data?.roundId === roundId,
+        );
+
+        if (reasoningCount > 0 && hasResult) {
+            return;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    throw new Error(
+        `HCS verification timed out for round ${roundId} (reasoning and/or result not indexed by mirror node yet)`,
     );
-
-    if (reasoningCount === 0) {
-        throw new Error(`No HCS reasoning messages found for round ${roundId}`);
-    }
-    if (!hasResult) {
-        throw new Error(`No HCS result message found for round ${roundId}`);
-    }
 }
 
 async function main() {
     const contracts = createContractClient();
     const hcs = createHCSPublisher();
     const dataCollector = new DataCollector(process.env.COINGECKO_API_KEY);
-    const agents = buildHeuristicAgentProfiles();
-    const orchestrator = new RoundOrchestrator(contracts, hcs, dataCollector, agents);
-
-    const agentCount = await contracts.getAgentCount();
-    const myAddress = contracts.walletAddress.toLowerCase();
-
-    // Find agents we own
-    const ownedAgents: { id: number; name: string }[] = [];
-    for (let i = 1; i <= agentCount; i++) {
-        try {
-            const agentData = await contracts.getAgent(i);
-            if (agentData.owner.toLowerCase() === myAddress) {
-                ownedAgents.push({ id: i, name: agentData.name });
-            }
-        } catch (e) {
-            // Ignore missing agent ids
-        }
-    }
-
-    if (ownedAgents.length < agents.length) {
-        console.log(`\n🤖 Own ${ownedAgents.length} agents. Registering ${agents.length - ownedAgents.length} more...`);
-        // Register those that don't match our owned logic
-        let nextToRegister = 0;
-        for (const localAgent of agents) {
-            const alreadyOwned = ownedAgents.find(a => a.name === localAgent.name);
-            if (!alreadyOwned) {
-                try {
-                    console.log(`   Registering ${localAgent.name}...`);
-                    await contracts.registerAgent(localAgent.name, `Ascend AI Agent: ${localAgent.name}`, 10);
-                    const newId = await contracts.getAgentCount();
-                    ownedAgents.push({ id: newId, name: localAgent.name });
-                    console.log(`   ✅ Registered ${localAgent.name} (ID: ${newId})`);
-                } catch (e: any) {
-                    console.log(`   ⚠️ Failed to register ${localAgent.name}:`, e.message);
-                }
-            }
-        }
-    }
-
-    // Map the actual on-chain IDs to our heuristic agents
-    for (const localAgent of agents) {
-        const matchingOwned = ownedAgents.find(a => a.name === localAgent.name) || ownedAgents.find(a => a.name.toLowerCase() === localAgent.name.toLowerCase());
-        if (matchingOwned) {
-            localAgent.id = matchingOwned.id;
-        } else if (ownedAgents.length >= agents.length) {
-            // Fallback: just sequentially assign if names don't match
-            localAgent.id = ownedAgents[agents.indexOf(localAgent)].id;
-        }
-    }
-
-    console.log(`\n🤖 Operating Agents: ${agents.map(a => `${a.name}(#${a.id})`).join(', ')}`);
+    let agents = await ensureOwnedAgentProfiles(
+        contracts,
+        buildHeuristicAgentProfiles(),
+    );
 
     const config: RoundConfig = {
         commitDurationSecs: toPositiveInt(process.env.E2E_COMMIT_SECS, 45),
@@ -124,6 +92,20 @@ async function main() {
         roundDurationSecs: toPositiveInt(process.env.E2E_ROUND_SECS, 75),
         entryFeeHbar: toNonNegativeNumber(process.env.E2E_ENTRY_FEE_HBAR, 0),
     };
+    const serialTxSecs = toPositiveInt(process.env.E2E_SERIAL_TX_SECS, 6);
+    const forceAllAgents = process.env.E2E_FORCE_ALL_AGENTS === "true";
+    const maxSequentialAgents = Math.max(
+        1,
+        Math.floor(Math.max(1, config.revealDurationSecs - 2) / serialTxSecs),
+    );
+    if (!forceAllAgents && agents.length > maxSequentialAgents) {
+        agents = agents.slice(0, maxSequentialAgents);
+        console.log(
+            `[e2e] Using ${agents.length} agent(s) for ${config.revealDurationSecs}s reveal window in single-signer mode.`,
+        );
+    }
+    const orchestrator = new RoundOrchestrator(contracts, hcs, dataCollector, agents);
+    console.log(`\n🤖 Operating Agents: ${agents.map((a) => `${a.name}(#${a.id})`).join(", ")}`);
 
     const htsEnabled = process.env.E2E_HTS_REWARDS_ENABLED === "true";
     const rewardPerWinnerTokens = process.env.E2E_HTS_REWARD_PER_WINNER_TOKENS || "1";
@@ -144,11 +126,23 @@ async function main() {
         throw new Error(`Round ${result.roundId} did not resolve (status=${round.status})`);
     }
 
-    for (const prediction of result.predictions) {
-        const commitment = await contracts.getCommitment(result.roundId, prediction.agentId);
+    if (round.participantCount !== agents.length) {
+        throw new Error(
+            `Expected ${agents.length} participants, got ${round.participantCount} in round ${result.roundId}`,
+        );
+    }
+
+    if (result.predictions.length !== agents.length) {
+        throw new Error(
+            `Expected ${agents.length} revealed predictions, got ${result.predictions.length} in round ${result.roundId}`,
+        );
+    }
+
+    for (const agent of agents) {
+        const commitment = await contracts.getCommitment(result.roundId, agent.id);
         if (!commitment.committed || !commitment.revealed || !commitment.scored) {
             throw new Error(
-                `Commitment verification failed for agent ${prediction.agentName} in round ${result.roundId}`,
+                `Commitment verification failed for agent ${agent.name} (#${agent.id}) in round ${result.roundId}`,
             );
         }
     }

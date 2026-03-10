@@ -1,5 +1,6 @@
 import type { AgentPrediction, AgentProfile } from "../../src/core/round-orchestrator.js";
 import type { MarketData } from "../../src/core/data-collector.js";
+import type { ContractClient } from "../../src/core/contract-client.js";
 import { HTSClient } from "../../src/core/hts-client.js";
 
 function clamp(n: number, min: number, max: number): number {
@@ -90,6 +91,88 @@ export function buildHeuristicAgentProfiles(): AgentProfile[] {
     };
 
     return [sentinel, pulse, meridian, oracle];
+}
+
+function normalizeName(name: string): string {
+    return name.trim().toLowerCase();
+}
+
+export async function ensureOwnedAgentProfiles(
+    contracts: ContractClient,
+    profiles: AgentProfile[],
+): Promise<AgentProfile[]> {
+    const myAddress = contracts.walletAddress.toLowerCase();
+    const count = await contracts.getAgentCount();
+    const ownedAgents: Array<{ id: number; name: string }> = [];
+
+    for (let i = 1; i <= count; i++) {
+        try {
+            const agent = await contracts.getAgent(i);
+            if (agent.owner.toLowerCase() === myAddress) {
+                ownedAgents.push({ id: i, name: agent.name });
+            }
+        } catch {
+            // ignore unreadable ids
+        }
+    }
+
+    const usedIds = new Set<number>();
+
+    for (const profile of profiles) {
+        const desired = normalizeName(profile.name);
+        let owned = ownedAgents.find(
+            (entry) =>
+                !usedIds.has(entry.id) &&
+                (normalizeName(entry.name) === desired ||
+                    normalizeName(entry.name).startsWith(`${desired}-`)),
+        );
+
+        if (!owned) {
+            owned = ownedAgents.find((entry) => !usedIds.has(entry.id));
+        }
+
+        if (!owned) {
+            const suffix = contracts.walletAddress.slice(-4).toLowerCase();
+            const registrationCandidates = [
+                profile.name,
+                `${profile.name}-${suffix}`,
+                `${profile.name}-${suffix}-${Date.now().toString().slice(-4)}`,
+            ];
+
+            let lastError: unknown = null;
+            for (const candidateName of registrationCandidates) {
+                try {
+                    const newAgentId = Number(
+                        await contracts.registerAgent(
+                            candidateName,
+                            `Ascend AI Agent: ${profile.name}`,
+                            10,
+                        ),
+                    );
+                    owned = { id: newAgentId, name: candidateName };
+                    ownedAgents.push(owned);
+                    break;
+                } catch (error: any) {
+                    lastError = error;
+                    const message = String(error?.message || error);
+                    if (!message.includes("Already registered")) {
+                        throw error;
+                    }
+                }
+            }
+
+            if (!owned) {
+                throw new Error(
+                    `Could not provision an owned on-chain agent slot for ${profile.name}: ${String(lastError)}`,
+                );
+            }
+        }
+
+        usedIds.add(owned.id);
+        profile.id = owned.id;
+    }
+
+    return profiles;
 }
 
 export interface AgentEnvIdentity {

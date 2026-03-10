@@ -18,7 +18,8 @@ contract RoundProtocolTest is Test {
     address agent4 = makeAddr("oracle");
     address outsider = makeAddr("outsider");
 
-    uint256 constant BOND = 10 ether;
+    uint256 constant TINYBAR = 100_000_000;
+    uint256 constant BOND = 10 * TINYBAR;
 
     function setUp() public {
         registry = new AgentRegistry();
@@ -42,6 +43,99 @@ contract RoundProtocolTest is Test {
         registry.registerAgent{value: BOND}("Meridian", "MeanRev");
         vm.prank(agent4);
         registry.registerAgent{value: BOND}("Oracle", "Meta");
+    }
+
+    function _ownerForIndex(uint256 index) internal view returns (address) {
+        if (index == 1) return agent1;
+        if (index == 2) return agent2;
+        if (index == 3) return agent3;
+        if (index == 4) return agent4;
+        revert("owner not initialized");
+    }
+
+    function _registerSyntheticAgent(uint256 index) internal returns (address) {
+        address owner = makeAddr(string.concat("agent-", vm.toString(index)));
+        vm.deal(owner, 100 ether);
+        vm.prank(owner);
+        registry.registerAgent{value: BOND}(
+            string.concat("Agent", vm.toString(index)),
+            "Synthetic"
+        );
+        return owner;
+    }
+
+    function _runRoundWithParticipants(uint256 participantCount) internal {
+        require(participantCount >= 1, "invalid participant count");
+        require(
+            participantCount <= market.MAX_PARTICIPANTS_PER_ROUND(),
+            "exceeds market cap"
+        );
+
+        address[] memory owners = new address[](participantCount + 1);
+        for (uint256 i = 1; i <= participantCount; i++) {
+            if (i <= 4) {
+                owners[i] = _ownerForIndex(i);
+            } else {
+                owners[i] = _registerSyntheticAgent(i);
+            }
+        }
+
+        market.createRound(600, 300, 3600, 321800000000, 0);
+
+        bytes32[] memory salts = new bytes32[](participantCount + 1);
+        uint8[] memory directions = new uint8[](participantCount + 1);
+        uint256[] memory confidences = new uint256[](participantCount + 1);
+
+        for (uint256 i = 1; i <= participantCount; i++) {
+            salts[i] = keccak256(abi.encodePacked("salt", i));
+            directions[i] = i % 2 == 0 ? 1 : 0;
+            confidences[i] = 50 + i;
+
+            vm.prank(owners[i]);
+            market.commitPrediction(
+                1,
+                i,
+                keccak256(
+                    abi.encodePacked(directions[i], confidences[i], salts[i])
+                )
+            );
+        }
+
+        vm.warp(block.timestamp + 601);
+
+        for (uint256 i = 1; i <= participantCount; i++) {
+            vm.prank(owners[i]);
+            market.revealPrediction(
+                1,
+                i,
+                PredictionMarket.Direction(directions[i]),
+                confidences[i],
+                salts[i]
+            );
+        }
+
+        vm.warp(block.timestamp + 3600);
+        market.resolveRound(1, 334100000000);
+
+        for (uint256 i = 1; i <= participantCount; i++) {
+            market.claimResult(1, i);
+        }
+
+        (
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            uint8 onChainParticipantCount,
+            uint8 onChainRevealedCount
+        ) = market.getRound(1);
+
+        assertEq(onChainParticipantCount, participantCount);
+        assertEq(onChainRevealedCount, participantCount);
     }
 
     // ── COMMIT EDGE CASES ──
@@ -276,6 +370,50 @@ contract RoundProtocolTest is Test {
         assertEq(registry.getAgent(4).credScore, int256(90));
     }
 
+    function test_Full8AgentRound() public {
+        _runRoundWithParticipants(8);
+    }
+
+    function test_Full10AgentRound() public {
+        _runRoundWithParticipants(10);
+    }
+
+    function test_FCFSParticipantLimitEnforced() public {
+        uint256 maxParticipants = market.MAX_PARTICIPANTS_PER_ROUND();
+        market.createRound(600, 300, 3600, 321800000000, 0);
+
+        address[] memory owners = new address[](maxParticipants + 2);
+        for (uint256 i = 1; i <= maxParticipants; i++) {
+            if (i <= 4) {
+                owners[i] = _ownerForIndex(i);
+            } else {
+                owners[i] = _registerSyntheticAgent(i);
+            }
+
+            bytes32 salt = keccak256(abi.encodePacked("cap", i));
+            vm.prank(owners[i]);
+            market.commitPrediction(
+                1,
+                i,
+                keccak256(abi.encodePacked(uint8(i % 2), uint256(60), salt))
+            );
+        }
+
+        uint256 overflowAgentId = maxParticipants + 1;
+        address overflowOwner = _registerSyntheticAgent(overflowAgentId);
+        bytes32 overflowSalt = keccak256(
+            abi.encodePacked("cap", overflowAgentId)
+        );
+
+        vm.prank(overflowOwner);
+        vm.expectRevert("Round participant limit reached");
+        market.commitPrediction(
+            1,
+            overflowAgentId,
+            keccak256(abi.encodePacked(uint8(0), uint256(60), overflowSalt))
+        );
+    }
+
     // ── CANCEL ──
 
     function test_CancelRound() public {
@@ -356,8 +494,8 @@ contract RoundProtocolTest is Test {
         // Staker stakes on agent1 during commit phase
         vm.prank(makeAddr("staker"));
         vm.deal(makeAddr("staker"), 50 ether);
-        vault.stake{value: 10 ether}(1);
-        assertEq(vault.getTotalStakedOnAgent(1), 10 ether);
+        vault.stake{value: 10 * TINYBAR}(1);
+        assertEq(vault.getTotalStakedOnAgent(1), 10 * TINYBAR);
 
         // Agent1 commits and round continues normally
         bytes32 s = keccak256("s");
@@ -376,7 +514,7 @@ contract RoundProtocolTest is Test {
 
         // Agent data shows both staking and prediction data
         AgentRegistry.Agent memory a = registry.getAgent(1);
-        assertEq(a.totalStaked, 10 ether);
+        assertEq(a.totalStaked, 10 * TINYBAR);
         assertEq(a.credScore, int256(70));
     }
 }

@@ -30,7 +30,7 @@ const PREDICTION_MARKET_ABI = [
     "function getRoundCount() external view returns (uint256)",
     "function isRoundResolved(uint256 roundId) external view returns (bool)",
     "function getRoundOutcome(uint256 roundId) external view returns (uint8)",
-    "event RoundCreated(uint256 indexed roundId, uint256 startPrice, uint64 commitDeadline, uint64 revealDeadline)",
+    "event RoundCreated(uint256 indexed roundId, uint256 startPrice, uint64 commitDeadline, uint64 revealDeadline, uint64 resolveAfter, uint256 entryFee)",
     "event PredictionCommitted(uint256 indexed roundId, uint256 indexed agentId, bytes32 commitHash)",
     "event PredictionRevealed(uint256 indexed roundId, uint256 indexed agentId, uint8 direction, uint256 confidence)",
     "event RoundResolved(uint256 indexed roundId, uint256 endPrice, uint8 outcome)",
@@ -108,18 +108,21 @@ function requireDeployedAddress(name: string, value?: string): string {
 
 export class ContractClient {
     private provider: ethers.JsonRpcProvider;
-    private signer: ethers.Wallet;
+    private signer: ethers.Signer;
+    private signerAddress: string;
     private registry: ethers.Contract;
     private market: ethers.Contract;
     private vault: ethers.Contract;
 
     get walletAddress(): string {
-        return this.signer.address;
+        return this.signerAddress;
     }
 
     constructor(rpcUrl: string, privateKey: string, registryAddr: string, marketAddr: string, vaultAddr: string) {
         this.provider = new ethers.JsonRpcProvider(rpcUrl);
-        this.signer = new ethers.Wallet(privateKey, this.provider);
+        const wallet = new ethers.Wallet(privateKey, this.provider);
+        this.signerAddress = wallet.address;
+        this.signer = new ethers.NonceManager(wallet);
         this.registry = new ethers.Contract(registryAddr, AGENT_REGISTRY_ABI, this.signer);
         this.market = new ethers.Contract(marketAddr, PREDICTION_MARKET_ABI, this.signer);
         this.vault = new ethers.Contract(vaultAddr, STAKING_VAULT_ABI, this.signer);
@@ -142,14 +145,14 @@ export class ContractClient {
         if (!log) {
             console.warn("⚠️ Hashio event log delayed. Polling getAgentCount()...");
             const initialCount = Number(await this.registry.getAgentCount({ blockTag: "latest" }));
+            let latestCount = initialCount;
             for (let i = 0; i < 5; i++) {
                 await new Promise((r) => setTimeout(r, 2000));
                 const newCount = Number(await this.registry.getAgentCount({ blockTag: "latest" }));
-                // Given we just created one, if newCount is updated we use that. 
-                // However, without knowing the true sequence, we assume the latest minus one is ours.
-                if (newCount > 0) return BigInt(newCount - 1);
+                latestCount = newCount;
+                if (newCount > initialCount) return BigInt(newCount);
             }
-            return BigInt(initialCount > 0 ? initialCount - 1 : 0);
+            return BigInt(latestCount);
         }
 
         const parsed = this.registry.interface.parseLog({ topics: [...log.topics], data: log.data });
@@ -183,12 +186,14 @@ export class ContractClient {
         startPrice: bigint,
         entryFeeHbar: number
     ): Promise<bigint> {
+        // Hedera contracts store entry fees in tinybar units.
+        const entryFeeTinybar = ethers.parseUnits(entryFeeHbar.toString(), 8);
         const tx: ContractTransactionResponse = await this.market.createRound(
             commitDurationSecs,
             revealDurationSecs,
             roundDurationSecs,
             startPrice,
-            ethers.parseUnits(entryFeeHbar.toFixed(8), 8),
+            entryFeeTinybar,
             { gasLimit: 300_000 }
         );
 
@@ -205,32 +210,48 @@ export class ContractClient {
             console.warn("⚠️ Hashio event log delayed. Polling getRoundCount()...");
             // Hedera testnet RPC nodes can be heavily delayed for state reads right after a write.
             const initialCount = Number(await this.market.getRoundCount({ blockTag: "latest" }));
+            let latestCount = initialCount;
             for (let i = 0; i < 5; i++) {
                 await new Promise((r) => setTimeout(r, 2000));
                 const newCount = Number(await this.market.getRoundCount({ blockTag: "latest" }));
-                if (newCount > 0) return BigInt(newCount - 1);
+                latestCount = newCount;
+                if (newCount > initialCount) return BigInt(newCount);
             }
-            return BigInt(initialCount > 0 ? initialCount - 1 : 0);
+            return BigInt(latestCount);
         }
 
         const parsed = this.market.interface.parseLog({ topics: [...log.topics], data: log.data });
         return parsed?.args[0] as bigint;
     }
 
-    async commitPrediction(roundId: number, agentId: number, commitHash: string, entryFeeHbar: number = 0): Promise<void> {
-        // The contract was deployed with 0 entry fee to bypass Hedera tinybar/wei complexities in the demo.
-        const value = 0n;
-        const tx: ContractTransactionResponse = await this.market.commitPrediction(
+    async commitPredictionTx(
+        roundId: number,
+        agentId: number,
+        commitHash: string,
+        entryFeeHbar: number = 0,
+    ): Promise<ContractTransactionResponse> {
+        const value = entryFeeHbar > 0 ? ethers.parseEther(entryFeeHbar.toString()) : 0n;
+        return this.market.commitPrediction(
             roundId,
             agentId,
             commitHash as `0x${string}`,
             { value, gasLimit: 1_500_000 }
         );
+    }
+
+    async commitPrediction(roundId: number, agentId: number, commitHash: string, entryFeeHbar: number = 0): Promise<void> {
+        const tx = await this.commitPredictionTx(roundId, agentId, commitHash, entryFeeHbar);
         await tx.wait();
     }
 
-    async revealPrediction(roundId: number, agentId: number, direction: number, confidence: number, salt: string): Promise<void> {
-        const tx: ContractTransactionResponse = await this.market.revealPrediction(
+    async revealPredictionTx(
+        roundId: number,
+        agentId: number,
+        direction: number,
+        confidence: number,
+        salt: string,
+    ): Promise<ContractTransactionResponse> {
+        return this.market.revealPrediction(
             roundId,
             agentId,
             direction,
@@ -238,6 +259,10 @@ export class ContractClient {
             salt as `0x${string}`,
             { gasLimit: 1_500_000 }
         );
+    }
+
+    async revealPrediction(roundId: number, agentId: number, direction: number, confidence: number, salt: string): Promise<void> {
+        const tx = await this.revealPredictionTx(roundId, agentId, direction, confidence, salt);
         await tx.wait();
     }
 
@@ -304,9 +329,10 @@ export class ContractClient {
     }
 
     async unstake(agentId: number, amountHbar: number): Promise<void> {
+        const amountTinybar = ethers.parseUnits(amountHbar.toString(), 8);
         const tx: ContractTransactionResponse = await this.vault.unstake(
             agentId,
-            ethers.parseUnits(amountHbar.toFixed(8), 8),
+            amountTinybar,
             { gasLimit: 300_000 }
         );
         await tx.wait();
@@ -361,7 +387,17 @@ export class ContractClient {
     }
 
     getSignerAddress(): string {
-        return this.signer.address;
+        return this.signerAddress;
+    }
+
+    async transferHbar(to: string, amountHbar: number): Promise<void> {
+        if (amountHbar <= 0) return;
+        const tx = await this.signer.sendTransaction({
+            to,
+            value: ethers.parseEther(amountHbar.toString()),
+            gasLimit: 30_000,
+        });
+        await tx.wait();
     }
 
     static generateSalt(): string {
@@ -377,8 +413,8 @@ export class ContractClient {
 
 export function loadDeployments(): Deployments {
     const candidates = [
-        path.resolve(process.cwd(), "../contracts/deployments.json"),
         path.resolve(process.cwd(), "../deployments.json"),
+        path.resolve(process.cwd(), "../contracts/deployments.json"),
         path.resolve(process.cwd(), "deployments.json"),
     ];
 

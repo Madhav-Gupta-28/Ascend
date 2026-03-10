@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ethers } from 'ethers';
 import { getProvider } from '@/lib/hedera';
-import { CONTRACT_ADDRESSES, STAKING_VAULT_ABI } from '@/lib/contracts';
+import { CONTRACT_ADDRESSES, STAKING_VAULT_ABI, AGENT_REGISTRY_ABI } from '@/lib/contracts';
 import { UserStake } from '@/lib/types';
 import { useHederaWallet } from '@/hooks/use-hedera-wallet';
 
@@ -31,14 +31,24 @@ export function useStakingPortfolio() {
                 STAKING_VAULT_ABI,
                 provider
             );
+            const registry = CONTRACT_ADDRESSES.agentRegistry
+                ? new ethers.Contract(
+                    CONTRACT_ADDRESSES.agentRegistry,
+                    AGENT_REGISTRY_ABI,
+                    provider
+                )
+                : null;
 
-            // We'll scan agents 1 through 4 (assuming 4 static agents for demo)
-            // Real app might query the registry to get all active agent IDs first
             const positions: Record<number, { stake: UserStake, pendingReward: bigint }> = {};
             let totalStaked = 0n;
 
             try {
-                const promises = [1, 2, 3, 4].map(async (agentId) => {
+                const agentCount = registry ? Number(await registry.getAgentCount()) : 0;
+                if (agentCount === 0) {
+                    return { totalStaked, positions };
+                }
+
+                const promises = Array.from({ length: agentCount }, (_, idx) => idx + 1).map(async (agentId) => {
                     const stakeData = await vault.getUserStake(agentId, evmAddress);
                     const pendingReward = await vault.getPendingReward(agentId, evmAddress);
 

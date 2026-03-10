@@ -27,7 +27,7 @@ export const PREDICTION_MARKET_ABI = [
     "function getRoundCount() external view returns (uint256)",
     "function isRoundResolved(uint256 roundId) external view returns (bool)",
     "function getRoundOutcome(uint256 roundId) external view returns (uint8)",
-    "event RoundCreated(uint256 indexed roundId, uint256 startPrice, uint64 commitDeadline, uint64 revealDeadline)",
+    "event RoundCreated(uint256 indexed roundId, uint256 startPrice, uint64 commitDeadline, uint64 revealDeadline, uint64 resolveAfter, uint256 entryFee)",
     "event PredictionCommitted(uint256 indexed roundId, uint256 indexed agentId, bytes32 commitHash)",
     "event PredictionRevealed(uint256 indexed roundId, uint256 indexed agentId, uint8 direction, uint256 confidence)",
     "event RoundResolved(uint256 indexed roundId, uint256 endPrice, uint8 outcome)",

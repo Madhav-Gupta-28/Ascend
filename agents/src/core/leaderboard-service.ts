@@ -43,7 +43,7 @@ export class LeaderboardService {
                 const total = Number(data.totalPredictions);
                 const correct = Number(data.correctPredictions);
                 const credScore = Number(data.credScore);
-                const stakedStr = ethers.formatEther(data.totalStaked);
+                const stakedStr = ethers.formatUnits(data.totalStaked, 8);
 
                 const winRate = total > 0 ? (correct / total) * 100 : 0;
 

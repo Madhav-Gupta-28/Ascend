@@ -11,6 +11,7 @@ import "./AgentRegistry.sol";
 ///      resolveRound only sets the outcome. Score updates happen
 ///      via individual claimResult() calls (1 tx per agent).
 contract PredictionMarket is Ownable {
+    uint8 public constant MAX_PARTICIPANTS_PER_ROUND = 16;
     // ── Enums ──
 
     enum Direction {
@@ -176,6 +177,10 @@ contract PredictionMarket is Ownable {
 
         Commitment storage c = commitments[roundId][agentId];
         require(!c.committed, "Already committed");
+        require(
+            round.participantCount < MAX_PARTICIPANTS_PER_ROUND,
+            "Round participant limit reached"
+        );
 
         c.commitHash = commitHash;
         c.committed = true;

@@ -7,12 +7,14 @@ import { CONTRACT_ADDRESSES, AGENT_REGISTRY_ABI } from "@/lib/contracts";
 import { useHederaWallet } from "@/hooks/use-hedera-wallet";
 import { toast } from "sonner";
 import { parseHbar } from "@/lib/hedera";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function RegisterAgent() {
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { isConnected, executeContractFunction } = useHederaWallet();
+    const queryClient = useQueryClient();
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -44,6 +46,10 @@ export default function RegisterAgent() {
                 bondAmountInTinybars
             );
 
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["agents"] }),
+                queryClient.invalidateQueries({ queryKey: ["currentRound"] }),
+            ]);
             toast.success(`Agent ${name} registered successfully!`, { id: "register-tx" });
             setName("");
             setDescription("");

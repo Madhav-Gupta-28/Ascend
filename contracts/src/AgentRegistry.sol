@@ -25,7 +25,9 @@ contract AgentRegistry is Ownable {
 
     // ── Constants ──
 
-    uint256 public constant MIN_BOND = 10 * 10 ** 8; // 10 HBAR in tinybars
+    // Solidity msg.value on Hedera resolves to tinybar units.
+    // 1 HBAR = 100,000,000 tinybar.
+    uint256 public constant MIN_BOND = 10 * 100_000_000;
     uint256 public constant MAX_AGENTS = 100; // Hard cap for hackathon
 
     // ── State ──

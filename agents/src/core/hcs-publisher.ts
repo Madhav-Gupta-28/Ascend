@@ -29,8 +29,8 @@ export interface ReasoningMessage {
     type: "REASONING";
     roundId: number;
     agentId: string;
-    direction: "UP" | "DOWN";
-    confidence: number;
+    direction?: "UP" | "DOWN";
+    confidence?: number;
     reasoning: string;
 }
 
@@ -165,8 +165,8 @@ export class HCSPublisher {
     async publishReasoning(
         roundId: number,
         agentId: string,
-        direction: "UP" | "DOWN",
-        confidence: number,
+        direction: "UP" | "DOWN" | undefined,
+        confidence: number | undefined,
         reasoning: string,
     ): Promise<{ sequenceNumber: number }> {
         const maxReasoningLen = 600;
@@ -179,10 +179,15 @@ export class HCSPublisher {
             type: "REASONING",
             roundId,
             agentId,
-            direction,
-            confidence,
             reasoning: truncatedReasoning,
         };
+
+        if (direction) {
+            msg.direction = direction;
+        }
+        if (typeof confidence === "number") {
+            msg.confidence = confidence;
+        }
 
         return this.publishToTopic(this.predictionsTopicId, msg);
     }

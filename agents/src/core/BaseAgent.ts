@@ -16,7 +16,7 @@ import { generateObject } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
 
-import { ContractClient, createContractClient } from "./contract-client.js";
+import { ContractClient, loadDeployments } from "./contract-client.js";
 import { HCSPublisher, createHCSPublisher } from "./hcs-publisher.js";
 import { DataCollector, type MarketData } from "./data-collector.js";
 import { HCS10CommunicationNetwork } from "./hcs10-network.js";
@@ -72,7 +72,7 @@ export abstract class BaseAgent {
 
         // Each agent uses its own private key, NOT the operator key
         const rpcUrl = process.env.HEDERA_JSON_RPC || "https://testnet.hashio.io/api";
-        const contracts = require("../../deployments.json").contracts;
+        const contracts = loadDeployments().contracts;
 
         this.client = new ContractClient(
             rpcUrl,
@@ -292,11 +292,28 @@ export abstract class BaseAgent {
         this.saveState();
 
         // 5. Broadcast Commit TX to Hedera EVM
-        await this.client.commitPrediction(roundId, this.config.agentId, commitHash, Number(ethers.formatEther(entryFee)));
+        await this.client.commitPrediction(
+            roundId,
+            this.config.agentId,
+            commitHash,
+            Number(ethers.formatUnits(entryFee, 8)),
+        );
 
         this.state.commitments[roundId].committed = true;
         this.state.activeRoundId = roundId;
         this.saveState();
+
+        try {
+            await this.hcs.publishReasoning(
+                roundId,
+                this.config.name.toLowerCase(),
+                undefined,
+                prediction.confidence,
+                prediction.reasoning,
+            );
+        } catch (err: any) {
+            console.error(`[${this.config.name}] ⚠️ Failed to publish pre-reveal HCS reasoning: ${err.message}`);
+        }
 
         await this.publishReasoningToHCS10(roundId);
 
@@ -329,23 +346,7 @@ export abstract class BaseAgent {
         const data = this.state.commitments[roundId];
         if (!data) return;
 
-        // 1. Publish Reasoning to Hedera Consensus Service
-        // Critical security constraint: reasoning must be published AFTER commit hash is locked
-        try {
-            const hcsRes = await this.hcs.publishReasoning(
-                roundId,
-                this.config.name.toLowerCase(),
-                data.direction === 0 ? "UP" : "DOWN",
-                data.confidence,
-                data.reasoning
-            );
-            console.log(`[${this.config.name}] 📨 Published reasoning to HCS (seq #${hcsRes.sequenceNumber})`);
-        } catch (err: any) {
-            console.error(`[${this.config.name}] ⚠️ Failed to publish HCS reasoning: ${err.message}`);
-            // Continue to on-chain reveal even if HCS fails, so we don't get slashed
-        }
-
-        // 2. Broadcast Reveal TX to Hedera EVM
+        // 1. Broadcast Reveal TX to Hedera EVM
         await this.client.revealPrediction(
             roundId,
             this.config.agentId,
@@ -357,6 +358,20 @@ export abstract class BaseAgent {
         data.revealed = true;
         this.saveState();
         console.log(`[${this.config.name}] 🔓 Revealed prediction for round #${roundId} on-chain.`);
+
+        // 2. Publish full reasoning only after reveal is on-chain.
+        try {
+            const hcsRes = await this.hcs.publishReasoning(
+                roundId,
+                this.config.name.toLowerCase(),
+                data.direction === 0 ? "UP" : "DOWN",
+                data.confidence,
+                data.reasoning
+            );
+            console.log(`[${this.config.name}] 📨 Published reasoning to HCS (seq #${hcsRes.sequenceNumber})`);
+        } catch (err: any) {
+            console.error(`[${this.config.name}] ⚠️ Failed to publish HCS reasoning: ${err.message}`);
+        }
     }
 
     // ── LLM Integration ──
