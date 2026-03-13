@@ -66,6 +66,12 @@
       "namedRegex": "^/_not\\-found(?:/)?$"
     },
     {
+      "page": "/api/agents/register-hol",
+      "regex": "^/api/agents/register\\-hol(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/agents/register\\-hol(?:/)?$"
+    },
+    {
       "page": "/api/discourse/ask",
       "regex": "^/api/discourse/ask(?:/)?$",
       "routeKeys": {},
@@ -76,6 +82,12 @@
       "regex": "^/api/discourse/messages(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/discourse/messages(?:/)?$"
+    },
+    {
+      "page": "/api/hol/agents",
+      "regex": "^/api/hol/agents(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/hol/agents(?:/)?$"
     },
     {
       "page": "/api/protocol/top-agents",

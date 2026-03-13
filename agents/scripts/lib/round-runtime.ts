@@ -2,6 +2,9 @@ import type { AgentPrediction, AgentProfile } from "../../src/core/round-orchest
 import type { MarketData } from "../../src/core/data-collector.js";
 import type { ContractClient } from "../../src/core/contract-client.js";
 import { HTSClient } from "../../src/core/hts-client.js";
+import { generateObject } from "ai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { z } from "zod";
 
 function clamp(n: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, n));
@@ -91,6 +94,127 @@ export function buildHeuristicAgentProfiles(): AgentProfile[] {
     };
 
     return [sentinel, pulse, meridian, oracle];
+}
+
+// ── Known built-in agent names (use heuristic strategies) ──
+
+const KNOWN_AGENT_NAMES = new Set(["sentinel", "pulse", "meridian", "oracle"]);
+
+/**
+ * Creates an LLM-based analyzer for dynamically registered agents.
+ * Uses the agent's on-chain description as its persona prompt.
+ */
+function createGenericLLMAnalyzer(
+    agentName: string,
+    agentDescription: string,
+): (data: MarketData) => Promise<{ direction: "UP" | "DOWN"; confidence: number; reasoning: string }> {
+    const gemini = createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY });
+
+    return async (data: MarketData) => {
+        const prompt = `You are ${agentName}, an AI prediction agent on the Ascend Intelligence Market built on Hedera.
+Your strategy: ${agentDescription}
+
+Current HBAR/USD: $${data.price.currentPrice.toFixed(6)}
+24h Change: ${data.price.change24hPct.toFixed(2)}%
+24h High: $${data.price.high24h.toFixed(6)}
+24h Low: $${data.price.low24h.toFixed(6)}
+Volume 24h: $${data.price.volume24h.toLocaleString()}
+
+Based on your strategy, predict whether HBAR/USD will go UP or DOWN in the next hour.
+Provide your confidence level (0-100) and a concise reasoning (max 200 words).`;
+
+        try {
+            const { object } = await generateObject({
+                model: gemini("gemini-1.5-flash"),
+                schema: z.object({
+                    direction: z.enum(["UP", "DOWN"]),
+                    confidence: z.number().min(0).max(100),
+                    reasoning: z.string().max(800),
+                }),
+                prompt,
+            });
+            return {
+                direction: object.direction,
+                confidence: clamp(Math.round(object.confidence), 40, 95),
+                reasoning: object.reasoning,
+            };
+        } catch (err: any) {
+            console.error(`[${agentName}] LLM analysis failed, using heuristic fallback: ${err.message}`);
+            // Fallback: simple heuristic based on 24h change
+            const direction = data.price.change24hPct >= 0 ? "UP" as const : "DOWN" as const;
+            const confidence = clamp(Math.round(55 + Math.abs(data.price.change24hPct) * 3), 45, 85);
+            return {
+                direction,
+                confidence,
+                reasoning: `Fallback heuristic: 24h change ${data.price.change24hPct.toFixed(2)}% suggests ${direction}.`,
+            };
+        }
+    };
+}
+
+/**
+ * Dynamically discovers all active agents owned by the deployer wallet
+ * from the on-chain AgentRegistry and creates AgentProfiles for them.
+ *
+ * - Known agents (Sentinel, Pulse, Meridian, Oracle) get heuristic strategies
+ * - Unknown agents get LLM-based analysis using their on-chain description
+ */
+export async function buildDynamicAgentProfiles(
+    contracts: ContractClient,
+): Promise<AgentProfile[]> {
+    const myAddress = contracts.walletAddress.toLowerCase();
+    const count = await contracts.getAgentCount();
+    const heuristicProfiles = buildHeuristicAgentProfiles();
+    const heuristicMap = new Map(
+        heuristicProfiles.map((p) => [p.name.trim().toLowerCase(), p]),
+    );
+
+    const profiles: AgentProfile[] = [];
+    const maxAgents = Number(process.env.ORCHESTRATOR_MAX_AGENTS || "8");
+
+    for (let i = 1; i <= count && profiles.length < maxAgents; i++) {
+        try {
+            const agent = await contracts.getAgent(i);
+            if (!agent.active) continue;
+            if (agent.owner.toLowerCase() !== myAddress) continue;
+
+            const normalizedName = agent.name.trim().toLowerCase();
+
+            // Check if this matches a known heuristic agent
+            const knownKey = [...KNOWN_AGENT_NAMES].find(
+                (k) => normalizedName === k || normalizedName.startsWith(`${k}-`),
+            );
+
+            if (knownKey && heuristicMap.has(knownKey)) {
+                const heuristic = heuristicMap.get(knownKey)!;
+                profiles.push({
+                    id: i,
+                    name: agent.name,
+                    analyze: heuristic.analyze,
+                });
+                heuristicMap.delete(knownKey); // Don't reuse
+                console.log(`[dynamic-discovery] Agent #${i} "${agent.name}" → heuristic strategy (${knownKey})`);
+            } else {
+                // Generic LLM-based agent
+                profiles.push({
+                    id: i,
+                    name: agent.name,
+                    analyze: createGenericLLMAnalyzer(agent.name, agent.description),
+                });
+                console.log(`[dynamic-discovery] Agent #${i} "${agent.name}" → LLM strategy`);
+            }
+        } catch {
+            // Skip unreadable agent IDs
+        }
+    }
+
+    if (profiles.length === 0) {
+        console.log("[dynamic-discovery] No owned agents found on-chain. Falling back to heuristic profiles.");
+        return heuristicProfiles;
+    }
+
+    console.log(`[dynamic-discovery] Discovered ${profiles.length} active owned agents.`);
+    return profiles;
 }
 
 function normalizeName(name: string): string {

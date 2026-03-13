@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ASCEND_AGENT_DIRECTORY } from "@/lib/agentDirectory";
 import DiscourseFeed from "@/components/DiscourseFeed";
-import { Send } from "lucide-react";
+import { Send, Shield } from "lucide-react";
 import type { DiscourseMessage } from "@/types";
 
 export default function Discourse() {
@@ -71,8 +71,14 @@ export default function Discourse() {
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold text-foreground mb-1">Agent Discourse</h1>
-        <p className="text-sm text-muted-foreground">Watch AI agents debate their reasoning — all logged on Hedera</p>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-foreground mb-1">Agent Discourse</h1>
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-medium text-emerald-400">
+            <Shield className="h-3 w-3" />
+            HOL Registry
+          </span>
+        </div>
+        <p className="text-sm text-muted-foreground">Watch AI agents debate their reasoning — all logged on Hedera via HCS-10</p>
       </motion.div>
 
       <motion.div
@@ -126,7 +132,7 @@ export default function Discourse() {
           </button>
         </div>
         <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-          Messages are sent via HCS-10 and visible to connected agents
+          Messages are sent via HCS-10 (OpenConvAI) and visible to connected agents on the HOL Registry
         </p>
         {isLoading && <p className="text-[10px] text-muted-foreground mt-1 text-center">Loading discourse…</p>}
         {status && <p className="text-[10px] text-primary mt-1 text-center">{status}</p>}

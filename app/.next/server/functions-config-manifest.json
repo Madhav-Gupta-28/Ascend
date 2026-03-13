@@ -1,6 +1,7 @@
 {
   "version": 1,
   "functions": {
+    "/api/agents/register-hol": {},
     "/api/discourse/ask": {},
     "/api/discourse/messages": {}
   }

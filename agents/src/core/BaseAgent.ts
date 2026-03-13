@@ -24,6 +24,8 @@ import {
     HederaAgentKitClient,
     createHederaAgentKitFromEnv,
 } from "./hedera-agent-kit.js";
+import { HOLChatHandler } from "./hol-chat-handler.js";
+import { getAgentHOLState } from "./hol-registry.js";
 
 // ── Types ──
 
@@ -58,6 +60,7 @@ export abstract class BaseAgent {
     protected client: ContractClient;
     protected hcs: HCSPublisher;
     protected hcs10: HCS10CommunicationNetwork | null = null;
+    protected holChat: HOLChatHandler | null = null;
     protected hederaAgentKit: HederaAgentKitClient | null = null;
     protected dataCollector: DataCollector;
     protected config: AgentConfig;
@@ -94,6 +97,8 @@ export abstract class BaseAgent {
                 `[${this.config.name}] Hedera Agent Kit disabled: ${error?.message || String(error)}`,
             );
         }
+
+        this.holChat = this.createHOLChatHandler();
 
         this.dataCollector = new DataCollector(process.env.COINGECKO_API_KEY);
 
@@ -144,6 +149,35 @@ export abstract class BaseAgent {
             autoCreateTopics: !(inboundTopicId && outboundTopicId),
             capabilities: this.config.hcs10Capabilities ?? ["reasoning", "qa"],
             mirrorNodeBaseUrl: process.env.HEDERA_MIRROR_NODE,
+        });
+    }
+
+    private createHOLChatHandler(): HOLChatHandler | null {
+        const holState = getAgentHOLState(this.config.name);
+        if (!holState) {
+            console.warn(
+                `[${this.config.name}] HOL Chat disabled: no HOL registration state found. Register agent via the frontend or run 'npm run register:hol'.`,
+            );
+            return null;
+        }
+
+        return new HOLChatHandler({
+            agentName: this.config.name,
+            personaPrompt: this.config.personaPrompt,
+            registrationState: holState,
+            getAgentContext: async () => {
+                try {
+                    const agent = await this.client.getAgent(this.config.agentId);
+                    return [
+                        `CredScore: ${agent.credScore}`,
+                        `Accuracy: ${agent.totalPredictions > 0 ? ((Number(agent.correctPredictions) / Number(agent.totalPredictions)) * 100).toFixed(1) : "N/A"}%`,
+                        `Total Predictions: ${agent.totalPredictions}`,
+                        `Correct: ${agent.correctPredictions}`,
+                    ].join("\n");
+                } catch {
+                    return "On-chain stats temporarily unavailable.";
+                }
+            },
         });
     }
 
@@ -204,6 +238,12 @@ export abstract class BaseAgent {
             }
         }
 
+        if (this.holChat) {
+            console.log(
+                `[${this.config.name}] 💬 HOL Chat handler active (accepting HCS-10 connections)`,
+            );
+        }
+
         while (this.isRunning) {
             try {
                 await this.syncWithChain();
@@ -229,6 +269,14 @@ export abstract class BaseAgent {
                 await this.handleUserQuestions();
             } catch (err: any) {
                 console.error(`[${this.config.name}] ⚠️ HCS-10 sync failed: ${err.message}`);
+            }
+        }
+
+        if (this.holChat) {
+            try {
+                await this.holChat.poll();
+            } catch (err: any) {
+                console.error(`[${this.config.name}] ⚠️ HOL Chat poll failed: ${err.message}`);
             }
         }
 

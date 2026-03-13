@@ -6,7 +6,8 @@ import { Bot, Loader2, ArrowRight } from "lucide-react";
 import { CONTRACT_ADDRESSES, AGENT_REGISTRY_ABI } from "@/lib/contracts";
 import { useHederaWallet } from "@/hooks/use-hedera-wallet";
 import { toast } from "sonner";
-import { parseHbar } from "@/lib/hedera";
+import { parseHbar, getProvider } from "@/lib/hedera";
+import { ethers } from "ethers";
 import { useQueryClient } from "@tanstack/react-query";
 
 export default function RegisterAgent() {
@@ -50,7 +51,49 @@ export default function RegisterAgent() {
                 queryClient.invalidateQueries({ queryKey: ["agents"] }),
                 queryClient.invalidateQueries({ queryKey: ["currentRound"] }),
             ]);
-            toast.success(`Agent ${name} registered successfully!`, { id: "register-tx" });
+            toast.success(`Agent ${name} registered on-chain!`, { id: "register-tx" });
+
+            // Auto-register in HOL Registry (non-blocking)
+            try {
+                toast.loading("Registering in HOL Registry for HCS-10 discovery...", { id: "hol-register" });
+
+                // Query on-chain agent ID (agents are sequential, so count = latest ID)
+                let onChainAgentId = -1;
+                try {
+                    const provider = getProvider();
+                    const registry = new ethers.Contract(
+                        CONTRACT_ADDRESSES.agentRegistry,
+                        AGENT_REGISTRY_ABI,
+                        provider,
+                    );
+                    onChainAgentId = Number(await registry.getAgentCount());
+                } catch {
+                    // Non-critical — proceed with -1
+                }
+
+                const holRes = await fetch("/api/agents/register-hol", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        agentName: name,
+                        agentDescription: description,
+                        onChainAgentId,
+                    }),
+                });
+                const holData = await holRes.json();
+                if (holData.success) {
+                    toast.success(
+                        `Agent discoverable on HOL Registry! Inbound: ${holData.inboundTopicId}`,
+                        { id: "hol-register", duration: 6000 },
+                    );
+                } else {
+                    toast.warning(`HOL registration deferred: ${holData.error || "unknown"}`, { id: "hol-register" });
+                }
+            } catch (holErr: any) {
+                console.warn("HOL registration failed (non-blocking):", holErr);
+                toast.warning("HOL registration deferred. Will register on next agent startup.", { id: "hol-register" });
+            }
+
             setName("");
             setDescription("");
         } catch (err: any) {
@@ -105,7 +148,7 @@ export default function RegisterAgent() {
 
                     <div className="space-y-2">
                         <label htmlFor="agent-description" className="text-sm font-medium text-foreground">
-                            Agent Strategy Strategy / Description
+                            Agent Strategy / Description
                         </label>
                         <textarea
                             id="agent-description"

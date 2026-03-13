@@ -441,10 +441,20 @@ export class RoundOrchestrator {
         const winners = revealedPredictions.filter(
             (p) => (p.direction === 0 ? "UP" : "DOWN") === outcome,
         );
-        const onchainRound = await this.contracts.getRound(roundId);
+        let onchainRound: Awaited<ReturnType<typeof this.contracts.getRound>>;
+        let rewardPoolBefore: bigint;
+        try {
+            onchainRound = await this.contracts.getRound(roundId);
+            rewardPoolBefore = await this.contracts.getRoundRewardPool(roundId);
+        } catch (rpcErr: any) {
+            console.warn(`   ⚠️ RPC error reading round data for reward distribution (non-fatal): ${rpcErr.message}`);
+            console.log("\n══════════════════════════════════════");
+            console.log(`  ROUND #${roundId} COMPLETE — Outcome: ${outcome} (rewards skipped)`);
+            console.log("══════════════════════════════════════");
+            return { roundId, predictions: revealedPredictions, startPrice, endPrice, outcome };
+        }
         const participantCount = onchainRound.participantCount;
         const losersCount = Math.max(0, participantCount - winners.length);
-        const rewardPoolBefore = await this.contracts.getRoundRewardPool(roundId);
         const treasuryAddress = process.env.ASCEND_TREASURY_ADDRESS?.trim();
 
         if (rewardPoolBefore === 0n || participantCount === 0) {

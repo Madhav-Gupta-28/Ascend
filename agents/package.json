@@ -12,13 +12,17 @@
         "test:agent-kit": "npx tsx scripts/test-hedera-agent-kit.ts",
         "run:orchestrator": "npx tsx scripts/run-orchestrator.ts",
         "test:e2e:testnet": "npx tsx scripts/testnet-e2e-round.ts",
-    "seed": "npx tsx scripts/seed-real-data.ts",
-    "deploy:ethers": "npx tsx scripts/deploy-contracts-ethers.ts",
-    "slow-round": "npx tsx scripts/slow-round-demo.ts"
-  },
+        "seed": "npx tsx scripts/seed-real-data.ts",
+        "deploy:ethers": "npx tsx scripts/deploy-contracts-ethers.ts",
+        "slow-round": "npx tsx scripts/slow-round-demo.ts",
+        "register:hol": "npx tsx scripts/register-hol-agents.ts",
+        "verify:e2e": "npx tsx scripts/verify-e2e.ts",
+        "start:agents": "npx tsx scripts/start-agents.ts"
+    },
     "dependencies": {
         "@ai-sdk/google": "^3.0.43",
         "@hashgraph/sdk": "^2.55.0",
+        "@hashgraphonline/standards-sdk": "^0.1.165",
         "@langchain/core": "^1.1.31",
         "@langchain/langgraph": "^1.2.1",
         "ai": "^6.0.116",

@@ -8,6 +8,7 @@ import { RoundOrchestrator, type RoundConfig } from "../src/core/round-orchestra
 import { createHTSClient } from "../src/core/hts-client.js";
 import {
     buildHeuristicAgentProfiles,
+    buildDynamicAgentProfiles,
     distributeHtsWinnerRewards,
     ensureOwnedAgentProfiles,
 } from "./lib/round-runtime.js";
@@ -53,9 +54,10 @@ async function main() {
     const contracts = createContractClient();
     const hcs = createHCSPublisher();
     const dataCollector = new DataCollector(process.env.COINGECKO_API_KEY);
+    // Dynamic agent discovery: finds all active agents owned by deployer on-chain
     let agents = await ensureOwnedAgentProfiles(
         contracts,
-        buildHeuristicAgentProfiles(),
+        await buildDynamicAgentProfiles(contracts),
     );
     const maxSequentialAgents = Math.max(
         1,
@@ -67,7 +69,7 @@ async function main() {
         );
         agents = agents.slice(0, maxSequentialAgents);
     }
-    const orchestrator = new RoundOrchestrator(contracts, hcs, dataCollector, agents);
+    let orchestrator = new RoundOrchestrator(contracts, hcs, dataCollector, agents);
 
     const htsClient = htsEnabled ? createHTSClient() : null;
 
@@ -119,6 +121,26 @@ async function main() {
             `[orchestrator] Sleeping ${cooldownSecs}s before next round (last loop ${elapsedSecs}s)`,
         );
         await sleep(cooldownSecs * 1000);
+
+        // Re-discover agents between rounds so newly registered agents get picked up
+        try {
+            const refreshed = await ensureOwnedAgentProfiles(
+                contracts,
+                await buildDynamicAgentProfiles(contracts),
+            );
+            if (refreshed.length !== agents.length) {
+                console.log(
+                    `[orchestrator] Agent roster changed: ${agents.length} → ${refreshed.length}`,
+                );
+            }
+            agents = refreshed;
+            if (!forceAllAgents && agents.length > maxSequentialAgents) {
+                agents = agents.slice(0, maxSequentialAgents);
+            }
+            orchestrator = new RoundOrchestrator(contracts, hcs, dataCollector, agents);
+        } catch (refreshErr: any) {
+            console.warn(`[orchestrator] Agent re-discovery failed (keeping existing): ${refreshErr.message}`);
+        }
     }
 }
 
