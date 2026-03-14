@@ -21,6 +21,7 @@
     },
     "dependencies": {
         "@ai-sdk/google": "^3.0.43",
+        "@ai-sdk/openai": "^3.0.41",
         "@hashgraph/sdk": "^2.55.0",
         "@hashgraphonline/standards-sdk": "^0.1.165",
         "@langchain/core": "^1.1.31",

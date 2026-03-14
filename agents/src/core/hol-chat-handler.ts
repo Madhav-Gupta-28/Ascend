@@ -16,8 +16,9 @@
  */
 
 import { HCS10Client } from "@hashgraphonline/standards-sdk";
-import { generateObject } from "ai";
+import { generateObject, generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import { z } from "zod";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -45,7 +46,8 @@ interface ChatState {
 export class HOLChatHandler {
     private client: HCS10Client;
     private config: HOLChatConfig;
-    private gemini;
+    private gemini: ReturnType<typeof createGoogleGenerativeAI> | null;
+    private groq: ReturnType<typeof createOpenAI> | null;
     private chatState: ChatState;
     private stateFilePath: string;
     private initialized = false;
@@ -65,7 +67,18 @@ export class HOLChatHandler {
             logLevel: "warn",
         });
 
-        this.gemini = createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY });
+        const geminiKey = (process.env.GEMINI_API_KEY || "").trim();
+        this.gemini = geminiKey
+            ? createGoogleGenerativeAI({ apiKey: geminiKey })
+            : null;
+
+        const groqKey = (process.env.GROQ_API_KEY || "").trim();
+        this.groq = groqKey
+            ? createOpenAI({
+                  apiKey: groqKey,
+                  baseURL: process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1",
+              })
+            : null;
 
         this.stateFilePath = path.resolve(
             process.cwd(),
@@ -217,19 +230,67 @@ Keep responses concise (under 300 words).
 User message: ${userMessage}
         `.trim();
 
-        try {
-            const { object } = await generateObject({
-                model: this.gemini("gemini-1.5-flash"),
-                schema: z.object({
-                    response: z.string().min(1).max(2000),
-                }),
-                prompt,
-            });
-            return object.response;
-        } catch (err: any) {
-            console.error(`[HOL-Chat] ${this.config.agentName} LLM error: ${err.message}`);
-            return `I'm ${this.config.agentName} on Ascend. I'm having trouble processing your request right now. Please try again shortly.`;
+        const schema = z.object({
+            response: z.string().min(1).max(2000),
+        });
+
+        const candidates: Array<{ provider: "groq" | "gemini"; model: string }> = [];
+        if (this.groq) {
+            for (const model of [
+                (process.env.GROQ_CHAT_MODEL || "").trim(),
+                (process.env.GROQ_MODEL || "").trim(),
+                "llama-3.3-70b-versatile",
+                "llama-3.1-8b-instant",
+            ]) {
+                if (model) candidates.push({ provider: "groq", model });
+            }
         }
+        if (this.gemini) {
+            for (const model of [
+                (process.env.GEMINI_CHAT_MODEL || "").trim(),
+                "gemini-2.0-flash",
+                "gemini-2.0-flash-lite",
+                "gemini-1.5-flash",
+            ]) {
+                if (model) candidates.push({ provider: "gemini", model });
+            }
+        }
+
+        const seen = new Set<string>();
+        for (const candidate of candidates) {
+            const key = `${candidate.provider}:${candidate.model}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            try {
+                if (candidate.provider === "groq") {
+                    const { text } = await generateText({
+                        model: this.groq!(candidate.model),
+                        prompt: `${prompt}
+
+Respond with plain text only. Keep it under 300 words.
+                        `.trim(),
+                    });
+                    const cleaned = text.trim();
+                    if (cleaned.length === 0) {
+                        throw new Error("Empty Groq response");
+                    }
+                    return cleaned.slice(0, 2000);
+                } else {
+                    const { object } = await generateObject({
+                        model: this.gemini!(candidate.model),
+                        schema,
+                        prompt,
+                    });
+                    return object.response;
+                }
+            } catch (err: any) {
+                console.warn(
+                    `[HOL-Chat] ${this.config.agentName} model ${candidate.provider}/${candidate.model} unavailable: ${err?.message || String(err)}`,
+                );
+            }
+        }
+
+        return `I'm ${this.config.agentName} on Ascend. My LLM provider is temporarily unavailable, but I can still answer based on on-chain context shortly.`;
     }
 
     private loadChatState(): ChatState {

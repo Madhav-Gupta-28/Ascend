@@ -110,7 +110,7 @@ function requireDeployedAddress(name: string, value?: string): string {
 
 export class ContractClient {
     private provider: ethers.JsonRpcProvider;
-    private signer: ethers.Signer;
+    private signer: ethers.NonceManager;
     private signerAddress: string;
     private registry: ethers.Contract;
     private market: ethers.Contract;
@@ -128,6 +128,39 @@ export class ContractClient {
         this.registry = new ethers.Contract(registryAddr, AGENT_REGISTRY_ABI, this.signer);
         this.market = new ethers.Contract(marketAddr, PREDICTION_MARKET_ABI, this.signer);
         this.vault = new ethers.Contract(vaultAddr, STAKING_VAULT_ABI, this.signer);
+    }
+
+    private isNonceExpiredError(error: any): boolean {
+        const code = String(error?.code || "");
+        const message = String(
+            error?.shortMessage ||
+                error?.reason ||
+                error?.message ||
+                error?.info?.error?.message ||
+                "",
+        ).toLowerCase();
+        return (
+            code === "NONCE_EXPIRED" ||
+            message.includes("nonce too low") ||
+            message.includes("nonce has already been used")
+        );
+    }
+
+    private async withNonceRetry<T>(operation: () => Promise<T>): Promise<T> {
+        try {
+            return await operation();
+        } catch (error: any) {
+            if (!this.isNonceExpiredError(error)) {
+                throw error;
+            }
+            this.signer.reset();
+            await new Promise((resolve) => setTimeout(resolve, 150));
+            return operation();
+        }
+    }
+
+    refreshNonce(): void {
+        this.signer.reset();
     }
 
     async registerAgent(name: string, description: string, bondHbar: number): Promise<bigint> {
@@ -233,11 +266,13 @@ export class ContractClient {
         entryFeeHbar: number = 0,
     ): Promise<ContractTransactionResponse> {
         const value = entryFeeHbar > 0 ? ethers.parseEther(entryFeeHbar.toString()) : 0n;
-        return this.market.commitPrediction(
-            roundId,
-            agentId,
-            commitHash as `0x${string}`,
-            { value, gasLimit: 1_500_000 }
+        return this.withNonceRetry(() =>
+            this.market.commitPrediction(
+                roundId,
+                agentId,
+                commitHash as `0x${string}`,
+                { value, gasLimit: 1_500_000 },
+            ),
         );
     }
 
@@ -253,13 +288,15 @@ export class ContractClient {
         confidence: number,
         salt: string,
     ): Promise<ContractTransactionResponse> {
-        return this.market.revealPrediction(
-            roundId,
-            agentId,
-            direction,
-            confidence,
-            salt as `0x${string}`,
-            { gasLimit: 1_500_000 }
+        return this.withNonceRetry(() =>
+            this.market.revealPrediction(
+                roundId,
+                agentId,
+                direction,
+                confidence,
+                salt as `0x${string}`,
+                { gasLimit: 1_500_000 },
+            ),
         );
     }
 
@@ -269,23 +306,29 @@ export class ContractClient {
     }
 
     async resolveRound(roundId: number, endPrice: bigint): Promise<void> {
-        const tx: ContractTransactionResponse = await this.market.resolveRound(roundId, endPrice, { gasLimit: 1_500_000 });
+        const tx: ContractTransactionResponse = await this.withNonceRetry(() =>
+            this.market.resolveRound(roundId, endPrice, { gasLimit: 1_500_000 }),
+        );
         await tx.wait();
     }
 
     async claimResult(roundId: number, agentId: number): Promise<void> {
-        const tx: ContractTransactionResponse = await this.market.claimResult(roundId, agentId, { gasLimit: 1_500_000 });
+        const tx: ContractTransactionResponse = await this.withNonceRetry(() =>
+            this.market.claimResult(roundId, agentId, { gasLimit: 1_500_000 }),
+        );
         await tx.wait();
     }
 
     async withdrawRewardPool(roundId: number, amount: bigint, to?: string): Promise<void> {
         if (amount <= 0n) return;
         const recipient = to || this.signerAddress;
-        const tx: ContractTransactionResponse = await this.market.withdrawRewardPool(
-            roundId,
-            amount,
-            recipient,
-            { gasLimit: 500_000 },
+        const tx: ContractTransactionResponse = await this.withNonceRetry(() =>
+            this.market.withdrawRewardPool(
+                roundId,
+                amount,
+                recipient,
+                { gasLimit: 500_000 },
+            ),
         );
         await tx.wait();
     }

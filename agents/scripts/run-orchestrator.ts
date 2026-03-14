@@ -189,6 +189,7 @@ async function main() {
                         console.warn(
                             `[orchestrator] Admin round #${latestRoundId} commit window already closed; running unattended resolution path.`,
                         );
+                        contracts.refreshNonce();
                         const resolved = await orchestrator.resolveUnattendedRound(
                             latestRoundId,
                             "worker detected closed commit window before execution",
@@ -204,6 +205,7 @@ async function main() {
                             throw new Error("No eligible operator-managed agents available for admin round");
                         }
                         orchestrator = new RoundOrchestrator(contracts, hcs, dataCollector, agents);
+                        contracts.refreshNonce();
 
                         console.log(
                             `[orchestrator] Executing admin round #${latestRoundId} with agents: ${agents.map((a) => `${a.name}(#${a.id})`).join(", ")}`,

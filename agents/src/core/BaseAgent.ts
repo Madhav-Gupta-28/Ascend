@@ -12,8 +12,9 @@
 import { ethers } from "ethers";
 import * as fs from "fs";
 import * as path from "path";
-import { generateObject } from "ai";
+import { generateObject, generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import { z } from "zod";
 
 import { ContractClient, loadDeployments } from "./contract-client.js";
@@ -68,10 +69,13 @@ export abstract class BaseAgent {
     private stateFilePath: string;
     private state: AgentState;
     private isRunning: boolean = false;
-    private gemini;
+    private readonly chatOnlyMode: boolean;
+    private gemini: ReturnType<typeof createGoogleGenerativeAI> | null;
+    private groq: ReturnType<typeof createOpenAI> | null;
 
     constructor(config: AgentConfig) {
         this.config = { pollIntervalMs: 10000, ...config };
+        this.chatOnlyMode = process.env.ASCEND_CHAT_ONLY === "true";
 
         // Each agent uses its own private key, NOT the operator key
         const rpcUrl = process.env.HEDERA_JSON_RPC || "https://testnet.hashio.io/api";
@@ -110,7 +114,18 @@ export abstract class BaseAgent {
 
         this.dataCollector = new DataCollector(process.env.COINGECKO_API_KEY);
 
-        this.gemini = createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY });
+        const geminiKey = (process.env.GEMINI_API_KEY || "").trim();
+        this.gemini = geminiKey
+            ? createGoogleGenerativeAI({ apiKey: geminiKey })
+            : null;
+
+        const groqKey = (process.env.GROQ_API_KEY || "").trim();
+        this.groq = groqKey
+            ? createOpenAI({
+                  apiKey: groqKey,
+                  baseURL: process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1",
+              })
+            : null;
 
         // Local state persistence ensures recovery if process crashes between commit/reveal
         this.stateFilePath = path.resolve(process.cwd(), `.cache/agent_${config.agentId}_state.json`);
@@ -219,6 +234,11 @@ export abstract class BaseAgent {
         if (this.isRunning) return;
         this.isRunning = true;
         console.log(`[${this.config.name}] 🟢 Agent runtime started. Polling every ${this.config.pollIntervalMs}ms...`);
+        if (this.chatOnlyMode) {
+            console.log(
+                `[${this.config.name}] 💬 Chat-only mode enabled (round commit/reveal disabled)`,
+            );
+        }
 
         if (this.hcs10) {
             try {
@@ -286,6 +306,10 @@ export abstract class BaseAgent {
             } catch (err: any) {
                 console.error(`[${this.config.name}] ⚠️ HOL Chat poll failed: ${err.message}`);
             }
+        }
+
+        if (this.chatOnlyMode) {
+            return;
         }
 
         const roundCount = await this.client.getRoundCount();
@@ -432,6 +456,63 @@ export abstract class BaseAgent {
 
     // ── LLM Integration ──
 
+    private parseModelList(raw: string | undefined): string[] {
+        if (!raw) return [];
+        return raw
+            .split(",")
+            .map((m) => m.trim())
+            .filter(Boolean);
+    }
+
+    private getAnalysisModelCandidates(): Array<{ provider: "groq" | "gemini"; model: string }> {
+        const candidates: Array<{ provider: "groq" | "gemini"; model: string }> = [];
+
+        if (this.groq) {
+            for (const model of [
+                ...this.parseModelList(process.env.GROQ_ANALYSIS_MODELS),
+                ...this.parseModelList(process.env.GROQ_MODELS),
+                (process.env.GROQ_ANALYSIS_MODEL || "").trim(),
+                (process.env.GROQ_MODEL || "").trim(),
+                "llama-3.3-70b-versatile",
+                "llama-3.1-8b-instant",
+            ]) {
+                if (model) candidates.push({ provider: "groq", model });
+            }
+        }
+
+        if (this.gemini) {
+            for (const model of [
+                ...this.parseModelList(process.env.GEMINI_ANALYSIS_MODELS),
+                (process.env.GEMINI_ANALYSIS_MODEL || "").trim(),
+                "gemini-1.5-pro",
+                "gemini-2.0-flash",
+            ]) {
+                if (model) candidates.push({ provider: "gemini", model });
+            }
+        }
+
+        const deduped: Array<{ provider: "groq" | "gemini"; model: string }> = [];
+        const seen = new Set<string>();
+        for (const c of candidates) {
+            const key = `${c.provider}:${c.model}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            deduped.push(c);
+        }
+        return deduped;
+    }
+
+    private extractJsonObject(text: string): unknown {
+        const raw = text.trim();
+        const start = raw.indexOf("{");
+        const end = raw.lastIndexOf("}");
+        if (start < 0 || end < 0 || end <= start) {
+            throw new Error("Model response did not contain a JSON object");
+        }
+        const json = raw.slice(start, end + 1);
+        return JSON.parse(json);
+    }
+
     /**
      * Default implementation uses OpenAI GPT-4o with structured JSON output.
      * Can be overridden by subclasses for specific multi-agent strategies.
@@ -466,38 +547,89 @@ Task: Predict whether the HBAR/USD price will be UP or DOWN over the next round 
 You must provide a confidence score (0-100) and concise reasoning (under 500 characters).
     `;
 
-        try {
-            const { object } = await generateObject({
-                model: this.gemini('gemini-1.5-pro'),
-                schema: z.object({
-                    direction: z.enum(['UP', 'DOWN']),
-                    confidence: z.number().min(0).max(100),
-                    reasoning: z.string().max(800)
-                }),
-                prompt,
-            });
+        const schema = z.object({
+            direction: z.enum(["UP", "DOWN"]),
+            confidence: z.number().min(0).max(100),
+            reasoning: z.string().max(800),
+        });
 
-            return object;
-        } catch (error) {
-            console.error(`[${this.config.name}] LLM Generation failed, using safe fallback.`, error);
-            // Safe fallback to prevent slashing for non-participation
-            return {
-                direction: "UP",
-                confidence: 50,
-                reasoning: "LLM timeout. Defaulting to safe neutral historical upward bias."
-            };
+        for (const candidate of this.getAnalysisModelCandidates()) {
+            try {
+                if (candidate.provider === "groq") {
+                    const { text } = await generateText({
+                        model: this.groq!(candidate.model),
+                        prompt: `${prompt}
+
+Return ONLY a JSON object with keys:
+- direction: "UP" or "DOWN"
+- confidence: number between 0 and 100
+- reasoning: concise string (max 800 chars)
+                        `.trim(),
+                    });
+                    const parsed = schema.parse(this.extractJsonObject(text));
+                    return parsed;
+                } else {
+                    const { object } = await generateObject({
+                        model: this.gemini!(candidate.model),
+                        schema,
+                        prompt,
+                    });
+                    return object;
+                }
+            } catch (error: any) {
+                console.warn(
+                    `[${this.config.name}] ⚠️ Analysis model ${candidate.provider}/${candidate.model} unavailable: ${error?.message || String(error)}`,
+                );
+            }
         }
+
+        console.error(
+            `[${this.config.name}] LLM generation failed across all providers, using safe fallback.`,
+        );
+        return {
+            direction: "UP",
+            confidence: 50,
+            reasoning: "LLM timeout. Defaulting to safe neutral historical upward bias.",
+        };
     }
 
-    private getChatModelCandidates(): string[] {
-        const configured = (process.env.GEMINI_CHAT_MODEL || "").trim();
-        const candidates = [
-            configured,
-            "gemini-2.0-flash",
-            "gemini-2.0-flash-lite",
-            "gemini-1.5-flash",
-        ].filter((model): model is string => Boolean(model));
-        return Array.from(new Set(candidates));
+    private getChatModelCandidates(): Array<{ provider: "groq" | "gemini"; model: string }> {
+        const candidates: Array<{ provider: "groq" | "gemini"; model: string }> = [];
+
+        if (this.groq) {
+            for (const model of [
+                ...this.parseModelList(process.env.GROQ_CHAT_MODELS),
+                ...this.parseModelList(process.env.GROQ_MODELS),
+                (process.env.GROQ_CHAT_MODEL || "").trim(),
+                (process.env.GROQ_MODEL || "").trim(),
+                "llama-3.3-70b-versatile",
+                "llama-3.1-8b-instant",
+            ]) {
+                if (model) candidates.push({ provider: "groq", model });
+            }
+        }
+
+        if (this.gemini) {
+            for (const model of [
+                ...this.parseModelList(process.env.GEMINI_CHAT_MODELS),
+                (process.env.GEMINI_CHAT_MODEL || "").trim(),
+                "gemini-2.0-flash",
+                "gemini-2.0-flash-lite",
+                "gemini-1.5-flash",
+            ]) {
+                if (model) candidates.push({ provider: "gemini", model });
+            }
+        }
+
+        const deduped: Array<{ provider: "groq" | "gemini"; model: string }> = [];
+        const seen = new Set<string>();
+        for (const c of candidates) {
+            const key = `${c.provider}:${c.model}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            deduped.push(c);
+        }
+        return deduped;
     }
 
     private async generateChatAnswer(prompt: string): Promise<{ answer: string; confidence: number }> {
@@ -507,23 +639,36 @@ You must provide a confidence score (0-100) and concise reasoning (under 500 cha
         });
 
         let lastError: unknown = null;
-        for (const model of this.getChatModelCandidates()) {
+        for (const candidate of this.getChatModelCandidates()) {
             try {
-                const { object } = await generateObject({
-                    model: this.gemini(model),
-                    schema,
-                    prompt,
-                });
-                return object;
+                if (candidate.provider === "groq") {
+                    const { text } = await generateText({
+                        model: this.groq!(candidate.model),
+                        prompt: `${prompt}
+
+Return ONLY a JSON object with keys:
+- answer: short answer text (max 1200 chars)
+- confidence: number from 0 to 100
+                        `.trim(),
+                    });
+                    return schema.parse(this.extractJsonObject(text));
+                } else {
+                    const { object } = await generateObject({
+                        model: this.gemini!(candidate.model),
+                        schema,
+                        prompt,
+                    });
+                    return object;
+                }
             } catch (error: any) {
                 lastError = error;
                 console.warn(
-                    `[${this.config.name}] ⚠️ Chat model ${model} unavailable: ${error?.message || String(error)}`,
+                    `[${this.config.name}] ⚠️ Chat model ${candidate.provider}/${candidate.model} unavailable: ${error?.message || String(error)}`,
                 );
             }
         }
 
-        throw lastError ?? new Error("No compatible Gemini model available for chat answers");
+        throw lastError ?? new Error("No compatible model available for chat answers");
     }
 
     private getStrategySummary(): string {
@@ -535,7 +680,7 @@ You must provide a confidence score (0-100) and concise reasoning (under 500 cha
         return "an Ascend prediction agent";
     }
 
-    private async buildFallbackChatAnswer(question: string): Promise<{ answer: string; confidence: number }> {
+    private async getAgentMetricStrings(): Promise<{ credScoreText: string; accuracyText: string }> {
         let credScoreText = "unknown";
         let accuracyText = "unknown";
 
@@ -559,6 +704,12 @@ You must provide a confidence score (0-100) and concise reasoning (under 500 cha
             // Use default unknown metrics if chain fetch fails.
         }
 
+        return { credScoreText, accuracyText };
+    }
+
+    private async buildFallbackChatAnswer(question: string): Promise<{ answer: string; confidence: number }> {
+        const { credScoreText, accuracyText } = await this.getAgentMetricStrings();
+
         const loweredQuestion = question.toLowerCase();
         const strategy = this.getStrategySummary();
         const lead = loweredQuestion.includes("strategy")
@@ -576,10 +727,17 @@ You must provide a confidence score (0-100) and concise reasoning (under 500 cha
 
         for (const q of questions) {
             try {
+                const strategy = this.getStrategySummary();
+                const { credScoreText, accuracyText } = await this.getAgentMetricStrings();
                 const prompt = `
 You are ${this.config.name}, an AI trading agent on Ascend.
 Answer the user's question concisely and honestly.
 If the question asks for certainty, state uncertainty explicitly.
+Never fabricate on-chain stats. Use the verified snapshot below when asked:
+- CredScore: ${credScoreText}
+- Accuracy: ${accuracyText}
+- Strategy: ${strategy}
+If stats are "unknown", say they are temporarily unavailable.
 
 Question:
 ${q.payload.question}
