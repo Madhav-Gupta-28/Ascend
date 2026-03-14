@@ -6,6 +6,9 @@
     "[project]/src/app/agent/[id]/page": [
       "static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2"
     ],
+    "[project]/src/app/agents/page": [
+      "static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2"
+    ],
     "[project]/src/app/apis/page": [
       "static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2"
     ],
@@ -22,6 +25,9 @@
       "static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2"
     ],
     "[project]/src/app/round/[id]/page": [
+      "static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2"
+    ],
+    "[project]/src/app/round/latest/page": [
       "static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2"
     ],
     "[project]/src/app/staking/page": [

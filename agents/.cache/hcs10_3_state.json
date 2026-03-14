@@ -1,0 +1,88 @@
+{
+  "inboundTopicId": "0.0.8216273",
+  "outboundTopicId": "0.0.8216278",
+  "operatorId": "0.0.8216273@0.0.8127508",
+  "registered": true,
+  "peers": {
+    "0.0.8216272@0.0.8127508": {
+      "operatorId": "0.0.8216272@0.0.8127508",
+      "accountId": "0.0.8127508",
+      "inboundTopicId": "0.0.8216272",
+      "outboundTopicId": "0.0.8216276",
+      "agentId": "4",
+      "agentName": "Oracle",
+      "capabilities": [
+        "reasoning",
+        "qa"
+      ]
+    },
+    "0.0.8216274@0.0.8127508": {
+      "operatorId": "0.0.8216274@0.0.8127508",
+      "accountId": "0.0.8127508",
+      "inboundTopicId": "0.0.8216274",
+      "outboundTopicId": "0.0.8216277",
+      "agentId": "2",
+      "agentName": "Pulse",
+      "capabilities": [
+        "reasoning",
+        "qa"
+      ]
+    },
+    "0.0.8216271@0.0.8127508": {
+      "operatorId": "0.0.8216271@0.0.8127508",
+      "accountId": "0.0.8127508",
+      "inboundTopicId": "0.0.8216271",
+      "outboundTopicId": "0.0.8216275",
+      "agentId": "1",
+      "agentName": "Sentinel",
+      "capabilities": [
+        "reasoning",
+        "qa"
+      ]
+    }
+  },
+  "connections": {
+    "0.0.8216272@0.0.8127508": {
+      "peerOperatorId": "0.0.8216272@0.0.8127508",
+      "peerAccountId": "0.0.8127508",
+      "peerAgentId": "4",
+      "peerAgentName": "Oracle",
+      "peerOutboundTopicId": "0.0.8216276",
+      "requestId": "b2a1024c-17d5-4b34-ba23-f48941b4f46e",
+      "status": "active",
+      "updatedAt": 1773473723380,
+      "connectionTopicId": "0.0.8216378"
+    },
+    "0.0.8216274@0.0.8127508": {
+      "peerOperatorId": "0.0.8216274@0.0.8127508",
+      "peerAccountId": "0.0.8127508",
+      "peerAgentId": "2",
+      "peerAgentName": "Pulse",
+      "peerOutboundTopicId": "0.0.8216277",
+      "requestId": "1b7fb806-11bc-4abc-9d2d-1cff2a849bb7",
+      "status": "active",
+      "updatedAt": 1773473723675,
+      "connectionTopicId": "0.0.8216381"
+    },
+    "0.0.8216271@0.0.8127508": {
+      "peerOperatorId": "0.0.8216271@0.0.8127508",
+      "peerAccountId": "0.0.8127508",
+      "peerAgentId": "1",
+      "peerAgentName": "Sentinel",
+      "peerOutboundTopicId": "0.0.8216275",
+      "requestId": "ab658f25-88ca-4291-834b-f6b349450c9c",
+      "status": "active",
+      "updatedAt": 1773473747994,
+      "connectionTopicId": "0.0.8216382"
+    }
+  },
+  "cursors": {
+    "0.0.8128468": 4,
+    "0.0.8216273": 3,
+    "0.0.8216276": 2,
+    "0.0.8216275": 3,
+    "0.0.8216378": 1,
+    "0.0.8216381": 1,
+    "0.0.8216382": 8
+  }
+}

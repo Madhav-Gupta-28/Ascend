@@ -100,7 +100,7 @@ self.__SERVER_FILES_MANIFEST={
         "transform": "lodash/{{member}}"
       }
     },
-    "outputFileTracingRoot": "/Users/madhav/Desktop/projects/ascend-app/.claude/worktrees/condescending-liskov/app",
+    "outputFileTracingRoot": "/Users/madhav/Desktop/projects/ascend-app/app",
     "cacheComponents": false,
     "cacheLife": {
       "default": {
@@ -294,11 +294,11 @@ self.__SERVER_FILES_MANIFEST={
     "bundlePagesRouterDependencies": false,
     "configFileName": "next.config.js",
     "turbopack": {
-      "root": "/Users/madhav/Desktop/projects/ascend-app/.claude/worktrees/condescending-liskov/app"
+      "root": "/Users/madhav/Desktop/projects/ascend-app/app"
     },
     "distDirRoot": ".next"
   },
-  "appDir": "/Users/madhav/Desktop/projects/ascend-app/.claude/worktrees/condescending-liskov/app",
+  "appDir": "/Users/madhav/Desktop/projects/ascend-app/app",
   "relativeAppDir": "",
   "files": [
     ".next/routes-manifest.json",

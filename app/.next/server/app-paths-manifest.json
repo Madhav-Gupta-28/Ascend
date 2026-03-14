@@ -2,6 +2,7 @@
   "/_global-error/page": "app/_global-error/page.js",
   "/_not-found/page": "app/_not-found/page.js",
   "/agent/[id]/page": "app/agent/[id]/page.js",
+  "/agents/page": "app/agents/page.js",
   "/api/agents/register-hol/route": "app/api/agents/register-hol/route.js",
   "/api/discourse/ask/route": "app/api/discourse/ask/route.js",
   "/api/discourse/messages/route": "app/api/discourse/messages/route.js",
@@ -14,5 +15,6 @@
   "/page": "app/page.js",
   "/register/page": "app/register/page.js",
   "/round/[id]/page": "app/round/[id]/page.js",
+  "/round/latest/page": "app/round/latest/page.js",
   "/staking/page": "app/staking/page.js"
 }

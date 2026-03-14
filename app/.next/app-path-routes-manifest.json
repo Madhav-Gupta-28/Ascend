@@ -2,6 +2,7 @@
   "/_global-error/page": "/_global-error",
   "/_not-found/page": "/_not-found",
   "/agent/[id]/page": "/agent/[id]",
+  "/agents/page": "/agents",
   "/api/agents/register-hol/route": "/api/agents/register-hol",
   "/api/discourse/ask/route": "/api/discourse/ask",
   "/api/discourse/messages/route": "/api/discourse/messages",
@@ -14,5 +15,6 @@
   "/page": "/",
   "/register/page": "/register",
   "/round/[id]/page": "/round/[id]",
+  "/round/latest/page": "/round/latest",
   "/staking/page": "/staking"
 }

@@ -66,6 +66,12 @@
       "namedRegex": "^/_not\\-found(?:/)?$"
     },
     {
+      "page": "/agents",
+      "regex": "^/agents(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/agents(?:/)?$"
+    },
+    {
       "page": "/api/agents/register-hol",
       "regex": "^/api/agents/register\\-hol(?:/)?$",
       "routeKeys": {},
@@ -118,6 +124,12 @@
       "regex": "^/register(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/register(?:/)?$"
+    },
+    {
+      "page": "/round/latest",
+      "regex": "^/round/latest(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/round/latest(?:/)?$"
     },
     {
       "page": "/staking",

@@ -1,0 +1,88 @@
+{
+  "inboundTopicId": "0.0.8216272",
+  "outboundTopicId": "0.0.8216276",
+  "operatorId": "0.0.8216272@0.0.8127508",
+  "registered": true,
+  "peers": {
+    "0.0.8216274@0.0.8127508": {
+      "operatorId": "0.0.8216274@0.0.8127508",
+      "accountId": "0.0.8127508",
+      "inboundTopicId": "0.0.8216274",
+      "outboundTopicId": "0.0.8216277",
+      "agentId": "2",
+      "agentName": "Pulse",
+      "capabilities": [
+        "reasoning",
+        "qa"
+      ]
+    },
+    "0.0.8216271@0.0.8127508": {
+      "operatorId": "0.0.8216271@0.0.8127508",
+      "accountId": "0.0.8127508",
+      "inboundTopicId": "0.0.8216271",
+      "outboundTopicId": "0.0.8216275",
+      "agentId": "1",
+      "agentName": "Sentinel",
+      "capabilities": [
+        "reasoning",
+        "qa"
+      ]
+    },
+    "0.0.8216273@0.0.8127508": {
+      "operatorId": "0.0.8216273@0.0.8127508",
+      "accountId": "0.0.8127508",
+      "inboundTopicId": "0.0.8216273",
+      "outboundTopicId": "0.0.8216278",
+      "agentId": "3",
+      "agentName": "Meridian",
+      "capabilities": [
+        "reasoning",
+        "qa"
+      ]
+    }
+  },
+  "connections": {
+    "0.0.8216274@0.0.8127508": {
+      "peerOperatorId": "0.0.8216274@0.0.8127508",
+      "peerAccountId": "0.0.8127508",
+      "peerAgentId": "2",
+      "peerAgentName": "Pulse",
+      "peerOutboundTopicId": "0.0.8216277",
+      "requestId": "b82ee5bb-597c-425b-9125-a2b8d718005b",
+      "status": "active",
+      "updatedAt": 1773473702425,
+      "connectionTopicId": "0.0.8216376"
+    },
+    "0.0.8216271@0.0.8127508": {
+      "peerOperatorId": "0.0.8216271@0.0.8127508",
+      "peerAccountId": "0.0.8127508",
+      "peerAgentId": "1",
+      "peerAgentName": "Sentinel",
+      "peerOutboundTopicId": "0.0.8216275",
+      "requestId": "00e2b0d5-6778-48de-995e-764d0ce0e71f",
+      "status": "active",
+      "updatedAt": 1773473702781,
+      "connectionTopicId": "0.0.8216377"
+    },
+    "0.0.8216273@0.0.8127508": {
+      "peerOperatorId": "0.0.8216273@0.0.8127508",
+      "peerAccountId": "0.0.8127508",
+      "peerAgentId": "3",
+      "peerAgentName": "Meridian",
+      "peerOutboundTopicId": "0.0.8216278",
+      "requestId": "b2a1024c-17d5-4b34-ba23-f48941b4f46e",
+      "status": "active",
+      "updatedAt": 1773473703071,
+      "connectionTopicId": "0.0.8216378"
+    }
+  },
+  "cursors": {
+    "0.0.8128468": 4,
+    "0.0.8216272": 3,
+    "0.0.8216275": 3,
+    "0.0.8216278": 1,
+    "0.0.8216376": 1,
+    "0.0.8216377": 12,
+    "0.0.8216378": 1
+  }
+}
