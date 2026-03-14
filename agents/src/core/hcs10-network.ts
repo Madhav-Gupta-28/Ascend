@@ -148,14 +148,16 @@ interface HCS10NetworkState {
 const DEFAULT_FETCH_LIMIT = 100;
 
 function parseHederaPrivateKey(privateKey: string): PrivateKey {
+    const normalized = privateKey.trim();
+    // Prefer explicit key-type parsers first; generic fromString() can mis-parse raw hex ECDSA keys.
     try {
-        return PrivateKey.fromString(privateKey);
+        return PrivateKey.fromStringECDSA(normalized);
     } catch {
         try {
-            return PrivateKey.fromStringED25519(privateKey);
+            return PrivateKey.fromStringED25519(normalized);
         } catch {
             try {
-                return PrivateKey.fromStringECDSA(privateKey);
+                return PrivateKey.fromString(normalized);
             } catch {
                 throw new Error(
                     "Invalid HCS-10 private key format. Provide a Hedera ED25519 or ECDSA key string.",
@@ -443,7 +445,9 @@ export class HCS10CommunicationNetwork {
     }
 
     private async discoverPeers(): Promise<void> {
-        const from = (this.state.cursors[this.config.registryTopicId] ?? 0) + 1;
+        const cursor = this.state.cursors[this.config.registryTopicId] ?? 0;
+        // If no peers are cached, replay from the beginning to recover from stale cursors.
+        const from = Object.keys(this.state.peers).length === 0 && cursor > 0 ? 1 : cursor + 1;
         const messages = await this.transport.fetchMessages({
             topicId: this.config.registryTopicId,
             fromSequenceNumber: from,
@@ -471,12 +475,15 @@ export class HCS10CommunicationNetwork {
 
     private upsertPeer(operation: HCS10Operation): void {
         if (operation.op !== "register") return;
-        if (operation.account_id === this.config.operatorAccountId) return;
 
         const metadata = parseAgentMetadata(operation.m);
         if (!metadata) return;
 
         const operatorId = buildOperatorId(metadata.inboundTopicId, operation.account_id);
+        // In demo mode multiple agents can share one account with different inbound topics.
+        // Only skip an exact self-identity, not every registration from the same account id.
+        if (operatorId === this.state.operatorId) return;
+
         this.state.peers[operatorId] = {
             operatorId,
             accountId: operation.account_id,

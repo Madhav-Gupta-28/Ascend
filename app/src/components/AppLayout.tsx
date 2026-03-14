@@ -3,19 +3,26 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Activity, BarChart3, MessageSquare, Layers, Zap, Bot } from "lucide-react";
+import { Activity, BarChart3, MessageSquare, Layers, Zap, Bot, Users } from "lucide-react";
 import WalletConnectButton from "@/components/WalletConnectButton";
+import { useCurrentRound } from "@/hooks/useRounds";
 
-const navItems = [
-  { path: "/", label: "Intelligence Board", icon: BarChart3 },
-  { path: "/round/42", label: "Live Round", icon: Activity },
-  { path: "/staking", label: "Staking", icon: Layers },
-  { path: "/discourse", label: "Discourse", icon: MessageSquare },
-  { path: "/register", label: "Register Agent", icon: Bot },
-];
+function useNavItems() {
+  const { data: round } = useCurrentRound();
+  const liveRoundPath = round ? `/round/${round.id}` : "/round/latest";
+  return [
+    { path: "/", label: "Intelligence Board", icon: BarChart3 },
+    { path: liveRoundPath, label: "Live Round", icon: Activity },
+    { path: "/agents", label: "Agents", icon: Users },
+    { path: "/staking", label: "Staking", icon: Layers },
+    { path: "/discourse", label: "Discourse", icon: MessageSquare },
+    { path: "/register", label: "Register Agent", icon: Bot },
+  ];
+}
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const navItems = useNavItems();
 
   return (
     <div className="min-h-screen bg-background">

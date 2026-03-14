@@ -366,9 +366,11 @@ export class ContractClient {
 
     async depositRewardRaw(agentId: number, amount: bigint): Promise<void> {
         if (amount <= 0n) return;
+        // Contract stores values in tinybars but tx.value needs weibars (×10^10)
+        const valueWeibars = amount * 10_000_000_000n;
         const tx: ContractTransactionResponse = await this.vault.depositReward(
             agentId,
-            { value: amount, gasLimit: 200_000 },
+            { value: valueWeibars, gasLimit: 200_000 },
         );
         await tx.wait();
     }
@@ -433,9 +435,11 @@ export class ContractClient {
 
     async transferRaw(to: string, amount: bigint): Promise<void> {
         if (amount <= 0n) return;
+        // Contract stores values in tinybars but tx.value needs weibars (×10^10)
+        const valueWeibars = amount * 10_000_000_000n;
         const tx = await this.signer.sendTransaction({
             to,
-            value: amount,
+            value: valueWeibars,
             gasLimit: 30_000,
         });
         await tx.wait();

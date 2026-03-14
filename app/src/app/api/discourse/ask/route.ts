@@ -39,13 +39,14 @@ interface AgentStateFile {
 }
 
 function parseHederaPrivateKey(raw: string): PrivateKey {
+  const normalized = raw.trim();
   try {
-    return PrivateKey.fromString(raw);
+    return PrivateKey.fromStringECDSA(normalized);
   } catch {
     try {
-      return PrivateKey.fromStringED25519(raw);
+      return PrivateKey.fromStringED25519(normalized);
     } catch {
-      return PrivateKey.fromStringECDSA(raw);
+      return PrivateKey.fromString(normalized);
     }
   }
 }

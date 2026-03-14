@@ -75,7 +75,15 @@ export abstract class BaseAgent {
 
         // Each agent uses its own private key, NOT the operator key
         const rpcUrl = process.env.HEDERA_JSON_RPC || "https://testnet.hashio.io/api";
-        const contracts = loadDeployments().contracts;
+        const deployments = loadDeployments();
+        const contracts = {
+            agentRegistry:
+                process.env.AGENT_REGISTRY_ADDRESS || deployments.contracts.agentRegistry,
+            predictionMarket:
+                process.env.PREDICTION_MARKET_ADDRESS || deployments.contracts.predictionMarket,
+            stakingVault:
+                process.env.STAKING_VAULT_ADDRESS || deployments.contracts.stakingVault,
+        };
 
         this.client = new ContractClient(
             rpcUrl,
@@ -481,6 +489,85 @@ You must provide a confidence score (0-100) and concise reasoning (under 500 cha
         }
     }
 
+    private getChatModelCandidates(): string[] {
+        const configured = (process.env.GEMINI_CHAT_MODEL || "").trim();
+        const candidates = [
+            configured,
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+            "gemini-1.5-flash",
+        ].filter((model): model is string => Boolean(model));
+        return Array.from(new Set(candidates));
+    }
+
+    private async generateChatAnswer(prompt: string): Promise<{ answer: string; confidence: number }> {
+        const schema = z.object({
+            answer: z.string().min(1).max(1200),
+            confidence: z.number().min(0).max(100),
+        });
+
+        let lastError: unknown = null;
+        for (const model of this.getChatModelCandidates()) {
+            try {
+                const { object } = await generateObject({
+                    model: this.gemini(model),
+                    schema,
+                    prompt,
+                });
+                return object;
+            } catch (error: any) {
+                lastError = error;
+                console.warn(
+                    `[${this.config.name}] ⚠️ Chat model ${model} unavailable: ${error?.message || String(error)}`,
+                );
+            }
+        }
+
+        throw lastError ?? new Error("No compatible Gemini model available for chat answers");
+    }
+
+    private getStrategySummary(): string {
+        const name = this.config.name.toLowerCase();
+        if (name.includes("sentinel")) return "a technical-analysis momentum agent";
+        if (name.includes("pulse")) return "a sentiment and order-flow analysis agent";
+        if (name.includes("meridian")) return "a mean-reversion probability agent";
+        if (name.includes("oracle")) return "a meta-ensemble agent that combines peer signals";
+        return "an Ascend prediction agent";
+    }
+
+    private async buildFallbackChatAnswer(question: string): Promise<{ answer: string; confidence: number }> {
+        let credScoreText = "unknown";
+        let accuracyText = "unknown";
+
+        try {
+            const agent = await this.client.getAgent(this.config.agentId);
+            const credScore =
+                typeof agent.credScore === "number"
+                    ? agent.credScore
+                    : Number(agent.credScore);
+            if (Number.isFinite(credScore)) {
+                credScoreText = String(Math.trunc(credScore));
+            }
+
+            const totalPredictions = Number(agent.totalPredictions);
+            const correctPredictions = Number(agent.correctPredictions);
+            if (Number.isFinite(totalPredictions) && totalPredictions > 0 && Number.isFinite(correctPredictions)) {
+                const computed = (correctPredictions / totalPredictions) * 100;
+                accuracyText = `${computed.toFixed(1)}%`;
+            }
+        } catch {
+            // Use default unknown metrics if chain fetch fails.
+        }
+
+        const loweredQuestion = question.toLowerCase();
+        const strategy = this.getStrategySummary();
+        const lead = loweredQuestion.includes("strategy")
+            ? `My strategy is ${strategy}.`
+            : `I am ${this.config.name}, ${strategy}.`;
+        const answer = `${lead} My current CredScore is ${credScoreText} with ${accuracyText} accuracy.`;
+        return { answer, confidence: 58 };
+    }
+
     private async handleUserQuestions(): Promise<void> {
         if (!this.hcs10) return;
 
@@ -498,14 +585,15 @@ Question:
 ${q.payload.question}
                 `;
 
-                const { object } = await generateObject({
-                    model: this.gemini('gemini-1.5-flash'),
-                    schema: z.object({
-                        answer: z.string().min(1).max(1200),
-                        confidence: z.number().min(0).max(100),
-                    }),
-                    prompt,
-                });
+                let object: { answer: string; confidence: number };
+                try {
+                    object = await this.generateChatAnswer(prompt);
+                } catch (error: any) {
+                    console.warn(
+                        `[${this.config.name}] ⚠️ Falling back to deterministic chat answer: ${error?.message || String(error)}`,
+                    );
+                    object = await this.buildFallbackChatAnswer(q.payload.question);
+                }
 
                 await this.hcs10.sendAnswer(
                     q.connectionTopicId,

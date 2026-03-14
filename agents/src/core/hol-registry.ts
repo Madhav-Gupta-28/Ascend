@@ -41,6 +41,17 @@ export interface HOLRegistrationState {
 }
 
 const STATE_DIR = process.env.HOL_STATE_DIR || path.resolve(process.cwd(), ".cache");
+const HOL_AGENT_INITIAL_BALANCE_HBAR = Number.parseFloat(process.env.HOL_AGENT_INITIAL_BALANCE_HBAR ?? "5");
+const HOL_GUARDED_REGISTRY_BASE_URL =
+    process.env.HOL_GUARDED_REGISTRY_BASE_URL ?? "https://moonscape.tech";
+const HOL_REGISTRATION_MAX_ATTEMPTS = Number.parseInt(
+    process.env.HOL_REGISTRATION_MAX_ATTEMPTS ?? "180",
+    10,
+);
+const HOL_REGISTRATION_DELAY_MS = Number.parseInt(
+    process.env.HOL_REGISTRATION_DELAY_MS ?? "3000",
+    10,
+);
 
 function stateFilePath(agentName: string): string {
     return path.join(STATE_DIR, `hol_${agentName.toLowerCase()}_state.json`);
@@ -74,6 +85,7 @@ export function createHCS10Client(): HCS10Client {
         network,
         operatorId,
         operatorPrivateKey: operatorKey,
+        guardedRegistryBaseUrl: HOL_GUARDED_REGISTRY_BASE_URL,
         logLevel: "info",
     });
 }
@@ -109,10 +121,22 @@ export async function registerAgent(
     }
 
     const result = await client.createAndRegisterAgent(builder, {
-        progressCallback: (progress) => {
+        baseUrl: HOL_GUARDED_REGISTRY_BASE_URL,
+        initialBalance: Number.isFinite(HOL_AGENT_INITIAL_BALANCE_HBAR)
+            ? HOL_AGENT_INITIAL_BALANCE_HBAR
+            : 5,
+        maxAttempts:
+            Number.isInteger(HOL_REGISTRATION_MAX_ATTEMPTS) && HOL_REGISTRATION_MAX_ATTEMPTS > 0
+                ? HOL_REGISTRATION_MAX_ATTEMPTS
+                : 180,
+        delayMs:
+            Number.isInteger(HOL_REGISTRATION_DELAY_MS) && HOL_REGISTRATION_DELAY_MS > 0
+                ? HOL_REGISTRATION_DELAY_MS
+                : 3000,
+        progressCallback: (progress: unknown) => {
             console.log(`[HOL] ${config.name}: ${JSON.stringify(progress)}`);
         },
-    });
+    } as any);
 
     if (!result.success || !result.metadata) {
         throw new Error(`HOL registration failed for ${config.name}: ${result.error ?? "unknown error"}`);
