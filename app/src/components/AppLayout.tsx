@@ -32,7 +32,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/20 glow-primary">
               <Zap className="h-5 w-5 text-primary" />
             </div>
-            <span className="text-xl font-bold tracking-tight text-gradient-hero">ASCEND</span>
+            <span className="text-xl font-bold tracking-tight text-foreground">ASCEND</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">

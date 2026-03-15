@@ -41,14 +41,14 @@ export default function AgentCard({ agent, index }: { agent: Agent; index: numbe
     >
       <Link
         href={`/agent/${agent.id}`}
-        className={`group flex items-center gap-4 rounded-xl border bg-card p-4 transition-all duration-300 hover:border-primary/40 hover:bg-card/80 hover:glow-primary ${
-          rank === 1 ? "border-primary/40 shadow-[0_0_28px_rgba(59,130,246,0.45)]" : "border-border"
+        className={`group flex items-center gap-4 rounded-xl border bg-card p-4 transition-all duration-300 hover:border-primary/40 hover:bg-card/80 ${
+          rank === 1 ? "border-amber-500/40 shadow-[0_0_24px_rgba(245,158,11,0.15)]" : "border-border"
         }`}
       >
         {/* Rank */}
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg font-mono text-sm font-bold ${rank === 1 ? "bg-primary/20 text-primary glow-primary" :
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg font-mono text-sm font-bold ${rank === 1 ? "bg-amber-500/20 text-amber-400" :
           rank === 2 ? "bg-secondary/20 text-secondary" :
-            rank === 3 ? "bg-amber-500/20 text-amber-400" :
+            rank === 3 ? "bg-primary/20 text-primary" :
               "bg-muted text-muted-foreground"
           }`}>
           #{rank}

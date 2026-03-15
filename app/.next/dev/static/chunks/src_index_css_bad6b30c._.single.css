@@ -267,34 +267,34 @@ img, video {
   --card-foreground: 210 20% 98%;
   --popover: 220 36% 9%;
   --popover-foreground: 210 20% 98%;
-  --primary: 170 65% 50%;
+  --primary: 172 56% 48%;
   --primary-foreground: 222 47% 5%;
   --secondary: 239 84% 67%;
   --secondary-foreground: 0 0% 100%;
   --muted: 220 26% 14%;
   --muted-foreground: 218 11% 65%;
   --accent: 220 26% 17%;
-  --accent-foreground: 170 65% 50%;
+  --accent-foreground: 172 56% 48%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
   --border: 220 20% 18%;
   --input: 220 20% 18%;
-  --ring: 170 65% 50%;
+  --ring: 172 56% 48%;
   --radius: .75rem;
   --success: 160 84% 39%;
   --success-foreground: 0 0% 100%;
   --warning: 38 92% 50%;
   --warning-foreground: 0 0% 0%;
-  --glow-primary: 170 65% 50%;
+  --glow-primary: 172 56% 48%;
   --glow-secondary: 239 84% 67%;
   --sidebar-background: 222 47% 4%;
   --sidebar-foreground: 210 20% 96%;
-  --sidebar-primary: 170 65% 50%;
+  --sidebar-primary: 172 56% 48%;
   --sidebar-primary-foreground: 222 47% 5%;
   --sidebar-accent: 220 26% 12%;
   --sidebar-accent-foreground: 210 20% 96%;
   --sidebar-border: 220 20% 16%;
-  --sidebar-ring: 170 65% 50%;
+  --sidebar-ring: 172 56% 48%;
 }
 
 * {
@@ -306,7 +306,7 @@ body {
   color: hsl(var(--foreground));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-image: radial-gradient(circle at 18% -12%, #2dd2b714, #0000 34%), radial-gradient(circle at 82% 112%, #6467f20f, #0000 38%), linear-gradient(#070a13, #04060b);
+  background-image: radial-gradient(circle at 18% -12%, #36bfad0f, #0000 34%), radial-gradient(circle at 82% 112%, #6467f20d, #0000 38%), linear-gradient(#070a13, #04060b);
   background-attachment: fixed;
   font-family: Inter, system-ui, sans-serif;
 }
@@ -1566,8 +1566,16 @@ body {
   border-color: var(--color-border);
 }
 
+.border-amber-500\/10 {
+  border-color: #f59e0b1a;
+}
+
 .border-amber-500\/20 {
   border-color: #f59e0b33;
+}
+
+.border-amber-500\/40 {
+  border-color: #f59e0b66;
 }
 
 .border-blue-500\/20 {
@@ -1610,6 +1618,10 @@ body {
   border-color: hsl(var(--destructive) / .5);
 }
 
+.border-emerald-500\/10 {
+  border-color: #10b9811a;
+}
+
 .border-emerald-500\/20 {
   border-color: #10b98133;
 }
@@ -1650,8 +1662,8 @@ body {
   border-color: hsl(var(--primary) / .3);
 }
 
-.border-primary\/40 {
-  border-color: hsl(var(--primary) / .4);
+.border-secondary\/10 {
+  border-color: hsl(var(--secondary) / .1);
 }
 
 .border-secondary\/20 {
@@ -1706,6 +1718,10 @@ body {
 
 .bg-accent {
   background-color: hsl(var(--accent));
+}
+
+.bg-amber-500\/10 {
+  background-color: #f59e0b1a;
 }
 
 .bg-amber-500\/15 {
@@ -1871,6 +1887,10 @@ body {
 
 .bg-secondary {
   background-color: hsl(var(--secondary));
+}
+
+.bg-secondary\/10 {
+  background-color: hsl(var(--secondary) / .1);
 }
 
 .bg-secondary\/15 {
@@ -2689,9 +2709,9 @@ body {
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
 
-.shadow-\[0_0_28px_rgba\(59\,130\,246\,0\.45\)\] {
-  --tw-shadow: 0 0 28px #3b82f673;
-  --tw-shadow-colored: 0 0 28px var(--tw-shadow-color);
+.shadow-\[0_0_24px_rgba\(245\,158\,11\,0\.15\)\] {
+  --tw-shadow: 0 0 24px #f59e0b26;
+  --tw-shadow-colored: 0 0 24px var(--tw-shadow-color);
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
 
@@ -2936,7 +2956,7 @@ body {
 }
 
 .glow-primary {
-  box-shadow: 0 0 22px #2dd2b72e, 0 0 68px #2dd2b70d;
+  box-shadow: 0 0 22px #36bfad26, 0 0 68px #36bfad0a;
 }
 
 .glow-success {
@@ -2945,14 +2965,7 @@ body {
 
 .text-gradient-primary {
   color: #0000;
-  background-image: linear-gradient(135deg, #42d7be, #36a18f);
-  -webkit-background-clip: text;
-  background-clip: text;
-}
-
-.text-gradient-hero {
-  color: #0000;
-  background-image: linear-gradient(125deg, #42d7be, #47b4eb, #7274f3);
+  background-image: linear-gradient(135deg, #40c9b7, #379588);
   -webkit-background-clip: text;
   background-clip: text;
 }
@@ -3236,10 +3249,6 @@ body {
 .hover\:shadow-primary\/35:hover {
   --tw-shadow-color: hsl(var(--primary) / .35);
   --tw-shadow: var(--tw-shadow-colored);
-}
-
-.hover\:glow-primary:hover {
-  box-shadow: 0 0 22px #2dd2b72e, 0 0 68px #2dd2b70d;
 }
 
 .hover\:after\:bg-sidebar-border:hover:after {

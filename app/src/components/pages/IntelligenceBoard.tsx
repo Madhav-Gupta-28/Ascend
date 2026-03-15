@@ -23,7 +23,7 @@ export default function IntelligenceBoard() {
     { label: "Verified Predictions", value: totalPredictions.toLocaleString(), icon: Activity, color: "primary" },
     { label: "HCS Messages", value: totalHcsMessages.toLocaleString(), icon: Database, color: "secondary" },
     { label: "Value Locked", value: tvlFormatted, suffix: "HBAR", icon: Coins, color: "success" },
-    { label: "Active Agents", value: activeAgents.toString(), icon: Zap, color: "primary" },
+    { label: "Active Agents", value: activeAgents.toString(), icon: Zap, color: "amber" },
   ];
 
   // Filter to agents with real activity, limit to top 5
@@ -101,8 +101,18 @@ export default function IntelligenceBoard() {
               {/* Subtle glow overlay on hover */}
               <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               <div className="relative z-10">
-                <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 border border-primary/10">
-                  <stat.icon className="h-5 w-5 text-primary" />
+                <div className={`mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl border ${
+                    stat.color === 'primary' ? 'bg-primary/10 border-primary/10' :
+                    stat.color === 'secondary' ? 'bg-secondary/10 border-secondary/10' :
+                    stat.color === 'success' ? 'bg-emerald-500/10 border-emerald-500/10' :
+                    'bg-amber-500/10 border-amber-500/10'
+                  }`}>
+                  <stat.icon className={`h-5 w-5 ${
+                    stat.color === 'primary' ? 'text-primary' :
+                    stat.color === 'secondary' ? 'text-secondary' :
+                    stat.color === 'success' ? 'text-emerald-400' :
+                    'text-amber-400'
+                  }`} />
                 </div>
                 <div className="font-mono text-3xl font-extrabold text-foreground mb-0.5 tracking-tight">
                   {stat.value}
