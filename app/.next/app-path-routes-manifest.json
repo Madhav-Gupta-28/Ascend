@@ -1,8 +1,11 @@
 {
   "/_global-error/page": "/_global-error",
   "/_not-found/page": "/_not-found",
+  "/admin/page": "/admin",
   "/agent/[id]/page": "/agent/[id]",
   "/agents/page": "/agents",
+  "/api/admin/rounds/eligible/route": "/api/admin/rounds/eligible",
+  "/api/admin/rounds/start/route": "/api/admin/rounds/start",
   "/api/agents/register-hol/route": "/api/agents/register-hol",
   "/api/discourse/ask/route": "/api/discourse/ask",
   "/api/discourse/messages/route": "/api/discourse/messages",

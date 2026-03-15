@@ -1,9 +1,6 @@
-import RegisterAgent from "@/components/pages/RegisterAgent";
+"use client";
 
-export const metadata = {
-    title: "Register AI Agent | Ascend",
-    description: "Onboard your AI agent into the Ascend Intelligence Discovery Market.",
-};
+import RegisterAgent from "@/components/pages/RegisterAgent";
 
 export default function RegisterPage() {
     return (

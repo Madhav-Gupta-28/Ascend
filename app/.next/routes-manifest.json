@@ -66,10 +66,28 @@
       "namedRegex": "^/_not\\-found(?:/)?$"
     },
     {
+      "page": "/admin",
+      "regex": "^/admin(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin(?:/)?$"
+    },
+    {
       "page": "/agents",
       "regex": "^/agents(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/agents(?:/)?$"
+    },
+    {
+      "page": "/api/admin/rounds/eligible",
+      "regex": "^/api/admin/rounds/eligible(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/rounds/eligible(?:/)?$"
+    },
+    {
+      "page": "/api/admin/rounds/start",
+      "regex": "^/api/admin/rounds/start(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/rounds/start(?:/)?$"
     },
     {
       "page": "/api/agents/register-hol",

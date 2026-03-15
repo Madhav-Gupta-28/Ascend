@@ -1,0 +1,18 @@
+{
+  "agentId": 3,
+  "name": "Meridian",
+  "activeRoundId": 11,
+  "commitments": {
+    "11": {
+      "roundId": 11,
+      "direction": 0,
+      "confidence": 50,
+      "reasoning": "LLM timeout. Defaulting to safe neutral historical upward bias.",
+      "salt": "0xedfd351899a36d245da8bc956daae2b92b7ae7f6b5c602c85df5855ea44022da",
+      "commitHash": "0x5ebf6df8b9f58a6f402f11224bbe9fb060c9a5aebd4476067db86956541a1a7c",
+      "committed": true,
+      "revealed": true,
+      "reasoningPublished": true
+    }
+  }
+}

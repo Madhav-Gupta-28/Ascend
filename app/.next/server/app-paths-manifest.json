@@ -1,8 +1,11 @@
 {
   "/_global-error/page": "app/_global-error/page.js",
   "/_not-found/page": "app/_not-found/page.js",
+  "/admin/page": "app/admin/page.js",
   "/agent/[id]/page": "app/agent/[id]/page.js",
   "/agents/page": "app/agents/page.js",
+  "/api/admin/rounds/eligible/route": "app/api/admin/rounds/eligible/route.js",
+  "/api/admin/rounds/start/route": "app/api/admin/rounds/start/route.js",
   "/api/agents/register-hol/route": "app/api/agents/register-hol/route.js",
   "/api/discourse/ask/route": "app/api/discourse/ask/route.js",
   "/api/discourse/messages/route": "app/api/discourse/messages/route.js",

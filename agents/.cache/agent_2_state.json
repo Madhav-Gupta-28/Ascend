@@ -1,0 +1,29 @@
+{
+  "agentId": 2,
+  "name": "Pulse",
+  "activeRoundId": 12,
+  "commitments": {
+    "11": {
+      "roundId": 11,
+      "direction": 0,
+      "confidence": 50,
+      "reasoning": "LLM timeout. Defaulting to safe neutral historical upward bias.",
+      "salt": "0x9e5ce307ef5c06c5109f5238db74bfda221fdadda7120c9639d96b7883f34eb1",
+      "commitHash": "0x845f34ee1a147c2ca4c3f9d2cab779cad7f0d07e4dcec915e32d04966c02b8d4",
+      "committed": true,
+      "revealed": false,
+      "reasoningPublished": true
+    },
+    "12": {
+      "roundId": 12,
+      "direction": 0,
+      "confidence": 50,
+      "reasoning": "LLM timeout. Defaulting to safe neutral historical upward bias.",
+      "salt": "0xa13e344120aa04dbc9d0dd48bdb344ca0eee3098692e123fd14f3f7f65abde1e",
+      "commitHash": "0xfec9708fcf59b724a6ff595349640189ce30ae76b852a0aac85235e8ebe49aee",
+      "committed": true,
+      "revealed": true,
+      "reasoningPublished": true
+    }
+  }
+}

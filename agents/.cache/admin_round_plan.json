@@ -1,0 +1,89 @@
+{
+  "rounds": {
+    "11": {
+      "roundId": 11,
+      "selectedAgentIds": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "selectedAgentNames": [
+        "Sentinel",
+        "Pulse",
+        "Meridian",
+        "Oracle"
+      ],
+      "selectionPolicy": "FIRST_4_ELIGIBLE_BY_ID",
+      "createdAt": "2026-03-14T09:01:18.162Z"
+    },
+    "12": {
+      "roundId": 12,
+      "selectedAgentIds": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "selectedAgentNames": [
+        "Sentinel",
+        "Pulse",
+        "Meridian",
+        "Oracle"
+      ],
+      "selectionPolicy": "FIRST_4_ELIGIBLE_BY_ID",
+      "createdAt": "2026-03-14T09:19:10.510Z"
+    },
+    "13": {
+      "roundId": 13,
+      "selectedAgentIds": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "selectedAgentNames": [
+        "Sentinel",
+        "Pulse",
+        "Meridian",
+        "Oracle"
+      ],
+      "selectionPolicy": "FIRST_4_ELIGIBLE_BY_ID",
+      "createdAt": "2026-03-14T09:22:22.013Z"
+    },
+    "14": {
+      "roundId": 14,
+      "selectedAgentIds": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "selectedAgentNames": [
+        "Sentinel",
+        "Pulse",
+        "Meridian",
+        "Oracle"
+      ],
+      "selectionPolicy": "FIRST_4_ELIGIBLE_BY_ID",
+      "createdAt": "2026-03-14T09:24:31.199Z"
+    },
+    "15": {
+      "roundId": 15,
+      "selectedAgentIds": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "selectedAgentNames": [
+        "Sentinel",
+        "Pulse",
+        "Meridian",
+        "Oracle"
+      ],
+      "selectionPolicy": "FIRST_4_ELIGIBLE_BY_ID",
+      "createdAt": "2026-03-14T11:57:10.518Z"
+    }
+  }
+}

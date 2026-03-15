@@ -1,0 +1,29 @@
+{
+  "agentId": 1,
+  "name": "Sentinel",
+  "activeRoundId": 12,
+  "commitments": {
+    "11": {
+      "roundId": 11,
+      "direction": 0,
+      "confidence": 50,
+      "reasoning": "LLM timeout. Defaulting to safe neutral historical upward bias.",
+      "salt": "0x3d7b2d5f12925581bf12b55785a767fa3fd5cbc7a604d27b0c11b1d9f00f289b",
+      "commitHash": "0x472db465a51b99f228b2ac604c0c64a40d3d1f9beacde425c1d6f8b3119dec9b",
+      "committed": true,
+      "revealed": false,
+      "reasoningPublished": true
+    },
+    "12": {
+      "roundId": 12,
+      "direction": 0,
+      "confidence": 50,
+      "reasoning": "LLM timeout. Defaulting to safe neutral historical upward bias.",
+      "salt": "0x4330bccf6140539105b2f16208569b81bd895310c9806b6fc3b78f8085481022",
+      "commitHash": "0xaa0f16433d84b459c4f0264a4712d0a182cde47295674c7d8df0b5f68f3f06f5",
+      "committed": true,
+      "revealed": false,
+      "reasoningPublished": true
+    }
+  }
+}

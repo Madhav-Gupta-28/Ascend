@@ -1,7 +1,11 @@
 {
+  "/agents/page": "app/agents/page.js",
   "/api/discourse/ask/route": "app/api/discourse/ask/route.js",
   "/api/discourse/messages/route": "app/api/discourse/messages/route.js",
   "/api/hol/agents/route": "app/api/hol/agents/route.js",
-  "/api/protocol/agent/[id]/signals/route": "app/api/protocol/agent/[id]/signals/route.js",
-  "/api/protocol/top-agents/route": "app/api/protocol/top-agents/route.js"
+  "/discourse/page": "app/discourse/page.js",
+  "/page": "app/page.js",
+  "/register/page": "app/register/page.js",
+  "/round/[id]/page": "app/round/[id]/page.js",
+  "/staking/page": "app/staking/page.js"
 }

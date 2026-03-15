@@ -1,0 +1,18 @@
+{
+  "agentId": 4,
+  "name": "Oracle",
+  "activeRoundId": 11,
+  "commitments": {
+    "11": {
+      "roundId": 11,
+      "direction": 0,
+      "confidence": 50,
+      "reasoning": "LLM timeout. Defaulting to safe neutral historical upward bias.",
+      "salt": "0x05a97a309ea1d22ce90a7f90ff40616b27d8ab717d30e72267c69ba1cb470547",
+      "commitHash": "0xddc3119b23beaa7747ddbf6292596d674321d839a302bfe84af037f1ea103581",
+      "committed": true,
+      "revealed": false,
+      "reasoningPublished": true
+    }
+  }
+}

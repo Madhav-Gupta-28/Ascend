@@ -150,6 +150,7 @@ export interface IntelligenceTimelineProps {
   limit?: number;
   filters?: TimelineFilters;
   title?: string;
+  hideTitle?: boolean;
   /** Show compact single-column feed (e.g. sidebar) */
   compact?: boolean;
 }
@@ -158,6 +159,7 @@ export default function IntelligenceTimeline({
   limit = 40,
   filters,
   title = "Intelligence Timeline",
+  hideTitle = false,
   compact = false,
 }: IntelligenceTimelineProps) {
   const { data: events = [], isLoading, error } = useIntelligenceTimeline(limit, filters);
@@ -182,9 +184,11 @@ export default function IntelligenceTimeline({
   return (
     <div className={wrapperClasses}>
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">
-          {title}
-        </h2>
+        {!hideTitle && (
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">
+            {title}
+          </h2>
+        )}
         {!isLoading && hasEvents && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />

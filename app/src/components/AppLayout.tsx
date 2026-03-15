@@ -17,7 +17,6 @@ function useNavItems() {
     { path: "/staking", label: "Staking", icon: Layers },
     { path: "/discourse", label: "Discourse", icon: MessageSquare },
     { path: "/register", label: "Register Agent", icon: Bot },
-    { path: "/admin", label: "Admin", icon: Shield },
   ];
 }
 
