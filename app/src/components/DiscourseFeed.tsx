@@ -1,6 +1,6 @@
 import { DiscourseMessage } from "@/types";
 import { motion } from "framer-motion";
-import { ExternalLink, Database, Activity } from "lucide-react";
+import { CheckCircle2, ExternalLink } from "lucide-react";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 
 function getAgent(id: string) {
@@ -18,13 +18,20 @@ function getMessageMirrorLink(hcsMessageId: string): string | null {
   return `${mirrorBase}/api/v1/topics/${topicId}/messages/${sequence}`;
 }
 
+function formatUtcTime(iso: string): string {
+  const date = new Date(iso);
+  const hh = String(date.getUTCHours()).padStart(2, "0");
+  const mm = String(date.getUTCMinutes()).padStart(2, "0");
+  const ss = String(date.getUTCSeconds()).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
+}
+
 export default function DiscourseFeed({ messages }: { messages: DiscourseMessage[] }) {
   if (messages.length === 0) {
     return (
-      <div className="rounded-xl border border-border bg-background p-8 text-center">
-        <Activity className="h-8 w-8 text-muted-foreground mx-auto mb-3 opacity-50" />
-        <p className="text-sm font-mono text-muted-foreground uppercase tracking-widest">Awaiting Initial Telemetry</p>
-        <p className="text-xs text-muted-foreground mt-2">Start agents to begin populating HCS-10 intelligence logs</p>
+      <div className="rounded-sm border border-border bg-card p-8 text-center">
+        <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">No Messages Yet</p>
+        <p className="mt-2 text-sm text-muted-foreground">Start a chat command to publish the first discourse event.</p>
       </div>
     );
   }
@@ -34,53 +41,45 @@ export default function DiscourseFeed({ messages }: { messages: DiscourseMessage
       {messages.map((msg, i) => {
         const agent = getAgent(msg.agentName);
         const mirrorUrl = getMessageMirrorLink(msg.hcsMessageId);
-        
-        // Ensure consistent spacing and terminal look
+        const seq = msg.hcsMessageId.split("-").at(-1) || "—";
+
         return (
           <motion.div
             key={msg.hcsMessageId}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.05 }}
-            className="group flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4 py-3 px-4 border-b border-border/40 hover:bg-muted/30 transition-colors"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i < 12 ? i * 0.02 : 0 }}
+            className="grid grid-cols-[80px_140px_1fr_auto] items-start gap-3 border-b border-border/80 py-2.5 last:border-b-0"
           >
-            {/* Timestamp & Seq block (Fixed width) */}
-            <div className="shrink-0 flex sm:flex-col items-center sm:items-end gap-3 sm:gap-1 w-full sm:w-36 pt-0.5">
-               <div className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
-                  {new Date(msg.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' })}
-               </div>
-               <div className="flex items-center gap-1">
-                  <Database className="h-3 w-3 text-primary/70" />
-                  <span className="text-[10px] font-mono text-primary/70">SEQ: {msg.hcsMessageId.split('-')[1]}</span>
-               </div>
+            <p className="font-mono text-[11px] text-muted-foreground">[{formatUtcTime(msg.timestamp)}]</p>
+
+            <div className="inline-flex items-center gap-2">
+              <span className="text-base">{agent?.avatar || "🤖"}</span>
+              <span className="truncate font-mono text-xs uppercase tracking-[0.06em] text-foreground">
+                {msg.agentName}
+              </span>
             </div>
 
-            {/* Agent Identity */}
-            <div className="shrink-0 flex items-center gap-2 sm:w-36 pt-0.5">
-               <span className="text-sm opacity-80 group-hover:opacity-100 transition-opacity">{agent?.avatar || "🤖"}</span>
-               <span className="text-xs font-bold font-mono text-foreground truncate">{msg.agentName}</span>
-            </div>
+            <p className="font-mono text-xs leading-relaxed text-foreground">{msg.content}</p>
 
-            {/* Content Body */}
-            <div className="flex-1 min-w-0 flex flex-col gap-2">
-               <p className="text-sm font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
-                  {msg.content}
-               </p>
-               
-               {/* Actions visible on hover */}
-               {mirrorUrl && (
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex">
-                    <a
-                      href={mirrorUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded bg-background border border-border px-2 py-1 text-[10px] font-mono text-muted-foreground hover:text-primary hover:border-primary/50 transition-colors"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      Verify on Mirror Node
-                    </a>
-                  </div>
-               )}
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                #{seq}
+              </span>
+              {mirrorUrl ? (
+                <a
+                  href={mirrorUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
+                >
+                  <CheckCircle2 className="h-3 w-3" />
+                  Proof
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              ) : (
+                <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">—</span>
+              )}
             </div>
           </motion.div>
         );

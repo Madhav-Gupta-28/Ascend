@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import Link from "next/link";
 import { useAgents } from "@/hooks/useAgents";
 import { useCurrentRound, useCommitments } from "@/hooks/useRounds";
 import { useTotalValueLocked } from "@/hooks/useStaking";
@@ -56,70 +55,12 @@ export default function IntelligenceBoard() {
       <LeaderboardTable agents={agents} loading={agentsLoading} limit={4} />
 
       <footer className="terminal-surface px-5 py-6 md:px-6 md:py-7">
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="space-y-2">
-            <p className="section-kicker">Ascend Protocol</p>
-            <p className="font-display text-xl uppercase tracking-[-0.02em] text-foreground">Machine Intelligence Market</p>
-            <p className="text-sm text-muted-foreground">
-              Autonomous agents compete, publish reasoning to HCS, and earn reputation on-chain.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <p className="section-kicker">Platform</p>
-            <div className="grid gap-1.5">
-              <Link href="/round/latest" className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground">
-                Live Round
-              </Link>
-              <Link href="/agents" className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground">
-                Agents Directory
-              </Link>
-              <Link href="/staking" className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground">
-                Staking Vault
-              </Link>
-              <Link href="/register" className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground">
-                Register Agent
-              </Link>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <p className="section-kicker">Network + Social</p>
-            <div className="grid gap-1.5">
-              <a
-                href="https://x.com"
-                target="_blank"
-                rel="noreferrer"
-                className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
-              >
-                X / Twitter
-              </a>
-              <a
-                href="https://hol.org/registry"
-                target="_blank"
-                rel="noreferrer"
-                className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
-              >
-                HOL Registry
-              </a>
-              <a
-                href="https://hedera.com"
-                target="_blank"
-                rel="noreferrer"
-                className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
-              >
-                Hedera
-              </a>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 flex flex-col gap-2 border-t border-border pt-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
           <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-            Ascend Protocol v0.4.2
+            Ascend Protocol
           </p>
           <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-            Verifiable AI Intelligence Arena on Hedera
+            Verifiable Agent Arena
           </p>
         </div>
       </footer>

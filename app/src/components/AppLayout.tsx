@@ -3,14 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import WalletConnectButton from "@/components/WalletConnectButton";
-import { useCurrentRound } from "@/hooks/useRounds";
 
 function useNavItems() {
-  const { data: round } = useCurrentRound();
-  const liveRoundPath = round ? `/round/${round.id}` : "/round/latest";
   return [
-    { path: "/", label: "Intelligence Board" },
-    { path: liveRoundPath, label: "Live Round" },
+    { path: "/round/latest", label: "Live Round" },
+    { path: "/rounds", label: "Rounds" },
     { path: "/agents", label: "Agents" },
     { path: "/staking", label: "Staking" },
     { path: "/discourse", label: "Discourse" },
@@ -33,7 +30,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <nav className="hidden md:flex items-center gap-1.5">
             {navItems.map(({ path, label }) => {
-              const isActive = pathname === path || (path !== "/" && (pathname || "").startsWith(path.split("/").slice(0, 2).join("/")));
+              const current = pathname || "";
+              const isActive =
+                path === "/round/latest"
+                    ? current === "/round/latest" || (/^\/round\/\d+$/.test(current))
+                    : current === path || current.startsWith(`${path}/`);
               return (
                 <Link
                   key={path}
@@ -60,7 +61,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background">
         <div className="flex items-center justify-around py-2.5">
           {navItems.map(({ path, label }) => {
-            const isActive = pathname === path;
+            const current = pathname || "";
+            const isActive =
+              path === "/round/latest"
+                  ? current === "/round/latest" || (/^\/round\/\d+$/.test(current))
+                  : current === path || current.startsWith(`${path}/`);
             return (
               <Link
                 key={path}

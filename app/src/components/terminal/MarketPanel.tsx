@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { Agent, Commitment, Round } from "@/lib/types";
 import Link from "next/link";
 
@@ -7,9 +8,8 @@ interface MarketPanelProps {
   commitments: Record<number, Commitment>;
 }
 
-function roundTimer(round: Round | null | undefined): string {
-  if (!round) return "--:--";
-  const now = Math.floor(Date.now() / 1000);
+function roundTimer(round: Round | null | undefined, now: number | null): string {
+  if (!round || now == null) return "--:--";
   const target =
     round.status === 0
       ? round.commitDeadline
@@ -55,6 +55,17 @@ function confidenceFromCommitment(commitment: Commitment | undefined, fallback: 
 }
 
 export default function MarketPanel({ round, agents, commitments }: MarketPanelProps) {
+  const [nowSec, setNowSec] = useState<number | null>(null);
+
+  useEffect(() => {
+    setNowSec(Math.floor(Date.now() / 1000));
+    const timer = setInterval(() => {
+      setNowSec(Math.floor(Date.now() / 1000));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   const fallbackPrice = 0.28417;
   const currentPrice =
     round && round.endPrice > 0 ? round.endPrice : round?.startPrice ?? fallbackPrice;
@@ -62,7 +73,7 @@ export default function MarketPanel({ round, agents, commitments }: MarketPanelP
   const pct = previous > 0 ? ((currentPrice - previous) / previous) * 100 : 0;
   const positive = pct >= 0;
   const roundNo = round?.id ?? 842;
-  const liveRoundHref = round ? `/round/${roundNo}` : "/round/latest";
+  const liveRoundHref = "/round/latest";
   const byName = new Map(agents.map((agent) => [agent.name.toLowerCase(), agent]));
 
   return (
@@ -89,7 +100,7 @@ export default function MarketPanel({ round, agents, commitments }: MarketPanelP
             Round #{roundNo} • {roundPhase(round)}
           </p>
           <p className="mt-1 font-mono text-xs text-foreground">
-            Resolving in {roundTimer(round)}
+            Resolving in {roundTimer(round, nowSec)}
           </p>
           <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary">
             Open Live Arena →

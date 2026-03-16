@@ -1,55 +1,132 @@
 "use client";
 
-import { useParams } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { useParams } from "next/navigation";
+import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useAgent } from "@/hooks/useAgents";
 import { usePredictionsFeed } from "@/hooks/useHCSMessages";
-import PredictionTable from "@/components/PredictionTable";
-import IntelligenceTimeline from "@/components/IntelligenceTimeline";
-import { ArrowLeft, Shield, Target, TrendingUp, Users, Loader2, CheckCircle2 } from "lucide-react";
-import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
-import { Prediction } from "@/types";
+import { useIntelligenceTimeline } from "@/hooks/useIntelligenceTimeline";
+import { CONTRACT_ADDRESSES } from "@/lib/contracts";
 import { formatHbar } from "@/lib/hedera";
-import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
-import { useState, useEffect } from "react";
-
-const strategyColors: Record<string, string> = {
-  "Technical Analysis": "bg-primary/15 text-primary border-primary/20",
-  "Sentiment": "bg-pink-500/15 text-pink-400 border-pink-500/20",
-  "Mean Reversion": "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  "Meta-AI": "bg-secondary/15 text-secondary border-secondary/20",
-  "Momentum": "bg-blue-500/15 text-blue-400 border-blue-500/20",
-  "On-Chain": "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-};
+import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
+import type { TimelineEvent } from "@/lib/types";
 
 interface HOLAgentInfo {
+  uaid?: string;
   name: string;
   accountId?: string;
   inboundTopicId?: string;
+  profileTopicId?: string;
+}
+
+interface AgentSignalRow {
+  key: string;
+  roundId?: number;
+  direction: "UP" | "DOWN" | "UNKNOWN";
+  confidence: number | null;
+  timestampIso: string;
+  proofHref: string | null;
+}
+
+function hashscanAddressUrl(address: string): string {
+  const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
+  return `https://hashscan.io/${network}/address/${address}`;
+}
+
+function hashscanTxUrl(txHash: string): string {
+  const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
+  return `https://hashscan.io/${network}/transaction/${txHash}`;
+}
+
+function mirrorMessageUrl(topicId: string, sequenceNumber: number): string {
+  const base = process.env.NEXT_PUBLIC_HEDERA_MIRROR_NODE || "https://testnet.mirrornode.hedera.com";
+  return `${base}/api/v1/topics/${topicId}/messages/${sequenceNumber}`;
+}
+
+function mirrorTopicUrl(topicId: string): string {
+  const base = process.env.NEXT_PUBLIC_HEDERA_MIRROR_NODE || "https://testnet.mirrornode.hedera.com";
+  return `${base}/api/v1/topics/${topicId}/messages?limit=1&order=desc`;
+}
+
+function holRegistrySearchUrl(query?: string): string {
+  if (!query) return "https://hol.org/registry";
+  return `https://hol.org/registry?q=${encodeURIComponent(query)}`;
+}
+
+function strategyFromName(name: string): string {
+  const mapping: Record<string, string> = {
+    sentinel: "Technical Analysis",
+    pulse: "Sentiment",
+    meridian: "Mean Reversion",
+    oracle: "Meta-AI",
+  };
+  return mapping[name.toLowerCase()] || "Autonomous Strategy";
+}
+
+function directionFromUnknown(value: unknown): "UP" | "DOWN" | "UNKNOWN" {
+  if (value === "UP" || value === 0 || value === "0") return "UP";
+  if (value === "DOWN" || value === 1 || value === "1") return "DOWN";
+  if (typeof value === "string") {
+    const upper = value.toUpperCase();
+    if (upper === "UP") return "UP";
+    if (upper === "DOWN") return "DOWN";
+  }
+  return "UNKNOWN";
+}
+
+function asIsoFromConsensus(consensusTs?: string): string {
+  if (!consensusTs) return new Date(0).toISOString();
+  const [secondsRaw, nanosRaw = "0"] = consensusTs.split(".");
+  const seconds = Number(secondsRaw);
+  const nanos = Number(nanosRaw.padEnd(9, "0").slice(0, 9));
+  const millis = seconds * 1000 + Math.floor(nanos / 1_000_000);
+  return new Date(millis).toISOString();
+}
+
+function formatUtcTime(iso: string): string {
+  const date = new Date(iso);
+  const hh = String(date.getUTCHours()).padStart(2, "0");
+  const mm = String(date.getUTCMinutes()).padStart(2, "0");
+  const ss = String(date.getUTCSeconds()).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
+}
+
+function timelineProofHref(event?: TimelineEvent): string | null {
+  if (!event) return null;
+  if (event.transactionHash) return hashscanTxUrl(event.transactionHash);
+  if (event.topicId && event.sequenceNumber != null) {
+    return mirrorMessageUrl(event.topicId, event.sequenceNumber);
+  }
+  return null;
 }
 
 export default function AgentProfile() {
   const params = useParams();
-  const idStr = typeof params?.id === 'string' ? params.id : '';
-  const agentIdNum = parseInt(idStr, 10);
+  const idStr = typeof params?.id === "string" ? params.id : "";
+  const agentIdNum = Number.parseInt(idStr, 10);
 
   const { data: agent, isLoading: isAgentLoading } = useAgent(agentIdNum);
-  const { data: feed = [], isLoading: isFeedLoading } = usePredictionsFeed(100);
+  const { data: feed = [], isLoading: isFeedLoading } = usePredictionsFeed(220);
+  const { data: timelineEvents = [] } = useIntelligenceTimeline(
+    220,
+    agent?.name ? { agentName: agent.name } : undefined,
+  );
   const [holInfo, setHolInfo] = useState<HOLAgentInfo | null>(null);
 
   useEffect(() => {
+    setHolInfo(null);
     if (!agent?.name) return;
     fetch("/api/hol/agents")
       .then((res) => res.json())
       .then((data) => {
-        if (data.agents) {
-          const lowerName = agent.name.toLowerCase();
-          const info = data.agents.find((h: HOLAgentInfo) => 
-            h.name?.toLowerCase().includes(lowerName) || lowerName.includes(h.name?.toLowerCase() || "")
-          );
-          if (info) setHolInfo(info);
-        }
+        if (!Array.isArray(data?.agents)) return;
+        const lowerName = agent.name.toLowerCase();
+        const info = data.agents.find((entry: HOLAgentInfo) => {
+          const candidate = entry.name?.toLowerCase() || "";
+          return candidate.includes(lowerName) || lowerName.includes(candidate);
+        });
+        if (info) setHolInfo(info);
       })
       .catch(() => {});
   }, [agent?.name]);
@@ -57,238 +134,345 @@ export default function AgentProfile() {
   if (isAgentLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-40">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-muted-foreground mt-4">Syncing intelligence profile from Hedera...</p>
+        <Loader2 className="h-8 w-8 animate-spin text-secondary" />
+        <p className="mt-4 font-mono text-xs uppercase tracking-[0.12em] text-muted-foreground">
+          Loading agent terminal...
+        </p>
       </div>
     );
   }
 
   if (!agent) {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <p className="text-muted-foreground mb-4">Agent not found on-chain</p>
-        <Link href="/agents" className="text-primary hover:underline">Back to Directory</Link>
+      <div className="terminal-surface mx-auto max-w-3xl p-8 text-center">
+        <p className="font-display text-2xl uppercase tracking-[-0.02em] text-foreground">Agent Not Found</p>
+        <p className="mt-2 text-sm text-muted-foreground">No on-chain profile is available for this agent ID.</p>
+        <Link
+          href="/agents"
+          className="mt-4 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
+        >
+          Back to Agents
+        </Link>
       </div>
     );
   }
 
-  const directoryMetadata = getAgentDirectoryEntry(agent.name);
-  const avatar = directoryMetadata?.avatar || "🤖";
-  const nameToStrategy: Record<string, string> = {
-    "sentinel": "Technical Analysis",
-    "pulse": "Sentiment",
-    "meridian": "Mean Reversion",
-    "oracle": "Meta-AI"
-  };
-  const strategy = nameToStrategy[agent.name.toLowerCase()] || "AI Strategy";
+  const avatar = getAgentDirectoryEntry(agent.name)?.avatar ?? "🤖";
+  const strategy = strategyFromName(agent.name);
+  const totalStaked = Number(formatHbar(agent.totalStaked));
+  const holHref = holRegistrySearchUrl(holInfo?.accountId || holInfo?.name || agent.name);
+  const ownerHref = hashscanAddressUrl(agent.owner);
+  const registryHref = CONTRACT_ADDRESSES.agentRegistry
+    ? hashscanAddressUrl(CONTRACT_ADDRESSES.agentRegistry)
+    : null;
 
-  const agentFeed = feed.filter(msg => 
-    String(msg.parsed.agentId) === String(agent.id) ||
-    msg.parsed.agentId?.toLowerCase() === agent.name.toLowerCase()
-  );
+  const roundProofByRound = useMemo(() => {
+    const map = new Map<number, string>();
+    const prioritized = [...timelineEvents]
+      .filter((event) => event.roundId != null)
+      .sort((a, b) => {
+        const aWeight = a.eventType === "PREDICTION_REVEALED" ? 0 : 1;
+        const bWeight = b.eventType === "PREDICTION_REVEALED" ? 0 : 1;
+        if (aWeight !== bWeight) return aWeight - bWeight;
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
 
-  const predictions: Prediction[] = agentFeed.map(msg => ({
-    agentId: String(agent.id),
-    agentName: agent.name,
-    round: msg.parsed.roundId || 0,
-    direction: (msg.parsed.direction as "UP" | "DOWN") || null,
-    confidence: msg.parsed.confidence || 0,
-    actual: undefined,
-    correct: undefined,
-    reasoning: msg.parsed.reasoning || "",
-    timestamp: new Date(Number(msg.raw.consensusTimestamp.split('.')[0]) * 1000).toISOString(),
-    hcsMessageId: `${msg.raw.topicId}-${msg.raw.sequenceNumber}`
-  }));
+    for (const event of prioritized) {
+      const roundId = event.roundId;
+      if (roundId == null || map.has(roundId)) continue;
+      const href = timelineProofHref(event);
+      if (href) map.set(roundId, href);
+    }
 
-  const totalStakedHbar = Number(formatHbar(agent.totalStaked));
+    return map;
+  }, [timelineEvents]);
 
-  // Generate fake history chart data ending at current credScore
-  const credHistory = Array.from({ length: 15 }).map((_, idx) => {
-    const base = Math.max(0, Number(agent.credScore) - 40);
-    const progress = (idx + 1) / 15;
-    const noise = Math.sin(idx + agent.id) * 5;
-    return {
-      t: `Round ${agent.totalPredictions > 15 ? agent.totalPredictions - 15 + idx : idx + 1}`,
-      score: Math.floor(base + progress * (Number(agent.credScore) - base) + noise),
-    };
-  });
-  // Ensure last point exactly matches current score
-  if (credHistory.length > 0) {
-    credHistory[credHistory.length - 1].score = Number(agent.credScore);
-  }
+  const signalRows = useMemo((): AgentSignalRow[] => {
+    const rows: AgentSignalRow[] = [];
+    for (const msg of feed) {
+      const parsedAgentId = String(msg.parsed.agentId ?? "").toLowerCase();
+      const isSameAgent =
+        parsedAgentId === String(agent.id) || parsedAgentId === agent.name.toLowerCase();
+      if (!isSameAgent) continue;
+
+      const parsedRoundId =
+        typeof msg.parsed.roundId === "number"
+          ? msg.parsed.roundId
+          : typeof msg.parsed.roundId === "string"
+            ? Number.parseInt(msg.parsed.roundId, 10)
+            : NaN;
+      const roundId = Number.isFinite(parsedRoundId) ? parsedRoundId : undefined;
+
+      const confidenceValue =
+        typeof msg.parsed.confidence === "number"
+          ? msg.parsed.confidence
+          : typeof msg.parsed.confidence === "string"
+            ? Number.parseFloat(msg.parsed.confidence)
+            : null;
+
+      const fallbackProof =
+        msg.raw.topicId && msg.raw.sequenceNumber != null
+          ? mirrorMessageUrl(msg.raw.topicId, msg.raw.sequenceNumber)
+          : null;
+
+      rows.push({
+        key: `${msg.raw.topicId}-${msg.raw.sequenceNumber}-${roundId ?? "x"}`,
+        roundId,
+        direction: directionFromUnknown(msg.parsed.direction),
+        confidence: Number.isFinite(confidenceValue as number) ? confidenceValue : null,
+        timestampIso: asIsoFromConsensus(msg.raw.consensusTimestamp),
+        proofHref: (roundId != null ? roundProofByRound.get(roundId) : null) ?? fallbackProof,
+      });
+    }
+
+    rows.sort((a, b) => new Date(b.timestampIso).getTime() - new Date(a.timestampIso).getTime());
+    return rows.slice(0, 40);
+  }, [agent.id, agent.name, feed, roundProofByRound]);
+
+  const sortedTimeline = useMemo(() => {
+    const events = [...timelineEvents];
+    events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return events.slice(0, 40);
+  }, [timelineEvents]);
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto">
-      <Link href="/agents" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group">
-        <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" /> Back to Directory
+    <div className="mx-auto max-w-7xl space-y-8 pb-16 md:space-y-10">
+      <Link
+        href="/agents"
+        className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Back to Agents
       </Link>
 
-      {/* Hero Profile Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="rounded-3xl border border-border bg-gradient-to-br from-card to-card/50 p-6 md:p-10 shadow-lg"
-      >
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-          <div className="flex items-start gap-6">
-            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-5xl border border-primary/20 glow-primary">
-              {avatar}
-            </div>
-            <div className="pt-1">
-              <div className="flex flex-wrap items-center gap-3 mb-2">
-                <h1 className="text-3xl font-extrabold text-foreground tracking-tight">{agent.name}</h1>
-                <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider ${strategyColors[strategy] || "bg-muted text-muted-foreground border-border"}`}>
-                  {strategy}
-                </span>
-                <span className="rounded-md bg-muted/50 px-2.5 py-1 text-[11px] font-mono font-bold text-muted-foreground uppercase tracking-wider">
-                  ID: #{agent.id}
-                </span>
-                {agent.active && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-mono font-bold text-emerald-400 uppercase tracking-wider">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse-glow" /> LIVE
-                  </span>
-                )}
-              </div>
-              <p className="text-base text-muted-foreground max-w-2xl leading-relaxed">{agent.description}</p>
-              
-              {holInfo && (
-                <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span className="text-xs font-medium text-emerald-500">Hashgraph Online Registered</span>
-                  <div className="w-px h-3 bg-emerald-500/20 mx-1" />
-                  <span className="text-[10px] font-mono text-muted-foreground">{holInfo.accountId}</span>
-                </div>
-              )}
-            </div>
+      <section className="terminal-surface px-5 py-5 md:px-6 md:py-6">
+        <div className="flex flex-col gap-4 border-b border-border pb-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="section-kicker">Agent Terminal</p>
+            <h1 className="section-title mt-1">{agent.name}</h1>
+            <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+              Agent #{agent.id} • {strategy}
+            </p>
           </div>
-          
-          <div className="shrink-0 flex flex-col gap-2 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-sm border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] ${agent.active ? "border-secondary/40 bg-secondary/10 text-secondary" : "border-border bg-card text-muted-foreground"}`}>
+              {agent.active ? "Active" : "Inactive"}
+            </span>
             <Link
               href="/staking"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
+              className="rounded-sm border border-border bg-card px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-foreground hover:border-secondary/50 hover:text-secondary"
             >
               Stake on Agent
             </Link>
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-10">
-          <div className="rounded-2xl border border-border bg-background p-5">
-            <div className="flex items-center gap-2 mb-2">
-              <Shield className="h-4 w-4 text-muted-foreground" />
-              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">CredScore</div>
-            </div>
-            <div className={`font-mono text-3xl font-bold ${agent.credScore >= 0 ? "text-success" : "text-destructive"}`}>
-              {agent.credScore >= 0 ? "+" : ""}{agent.credScore}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-border bg-background p-5">
-            <div className="flex items-center gap-2 mb-2">
-              <Target className="h-4 w-4 text-muted-foreground" />
-              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Accuracy</div>
-            </div>
-            <div className="font-mono text-3xl font-bold text-foreground">
-              {agent.accuracy.toFixed(1)}%
-            </div>
-          </div>
-          <div className="rounded-2xl border border-border bg-background p-5">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Predictions</div>
-            </div>
-            <div className="font-mono text-3xl font-bold text-foreground">
-              {agent.totalPredictions}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-border bg-background p-5">
-            <div className="flex items-center gap-2 mb-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Total Staked</div>
-            </div>
-            <div className="font-mono text-3xl font-bold text-foreground">
-              {totalStakedHbar >= 1000 ? `${(totalStakedHbar / 1000).toFixed(1)}k` : totalStakedHbar.toFixed(0)} <span className="text-base font-normal text-muted-foreground">HBAR</span>
-            </div>
-          </div>
+        <p className="mt-4 text-sm text-muted-foreground">{agent.description}</p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <a
+            href={holHref}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
+          >
+            HOL Registry
+            <ExternalLink className="h-3 w-3" />
+          </a>
+          {registryHref ? (
+            <a
+              href={registryHref}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
+            >
+              On-chain Registry
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : null}
+          <a
+            href={ownerHref}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
+          >
+            Owner
+            <ExternalLink className="h-3 w-3" />
+          </a>
+          {holInfo?.inboundTopicId ? (
+            <a
+              href={mirrorTopicUrl(holInfo.inboundTopicId)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
+            >
+              HCS-10 Inbound
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : null}
+          {holInfo?.profileTopicId ? (
+            <a
+              href={mirrorTopicUrl(holInfo.profileTopicId)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
+            >
+              HCS-11 Profile
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : null}
         </div>
-      </motion.div>
+      </section>
 
-      {/* Insights Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chart */}
-        <motion.div
-           initial={{ opacity: 0, y: 10 }}
-           animate={{ opacity: 1, y: 0 }}
-           transition={{ delay: 0.1 }}
-           className="lg:col-span-2 rounded-2xl border border-border bg-card p-6"
-        >
-          <div className="mb-6">
-            <h2 className="text-lg font-bold text-foreground">CredScore Growth</h2>
-            <p className="text-xs text-muted-foreground mt-1">On-chain performance trajectory over recent rounds</p>
-          </div>
-          <div className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={credHistory} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2DD4BF" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#2DD4BF" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="t" stroke="#4B5563" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#4B5563" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `+${val}`} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#0A0F1A', border: '1px solid #1F2937', borderRadius: '8px', fontSize: '12px' }}
-                  itemStyle={{ color: '#2DD4BF', fontFamily: 'monospace', fontWeight: 'bold' }}
-                />
-                <Area type="monotone" dataKey="score" stroke="#2DD4BF" strokeWidth={3} fillOpacity={1} fill="url(#colorScore)" isAnimationActive={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+        <div className="terminal-surface px-4 py-4 md:px-5 md:py-5">
+          <p className="terminal-heading">CredScore</p>
+          <p className={`mt-3 font-mono text-3xl font-semibold tracking-tight md:text-[34px] ${agent.credScore >= 0 ? "text-secondary" : "text-destructive"}`}>
+            {agent.credScore >= 0 ? "+" : ""}
+            {agent.credScore}
+          </p>
+        </div>
+        <div className="terminal-surface px-4 py-4 md:px-5 md:py-5">
+          <p className="terminal-heading">Accuracy</p>
+          <p className="mt-3 font-mono text-3xl font-semibold tracking-tight text-foreground md:text-[34px]">
+            {agent.accuracy.toFixed(1)}%
+          </p>
+        </div>
+        <div className="terminal-surface px-4 py-4 md:px-5 md:py-5">
+          <p className="terminal-heading">Predictions</p>
+          <p className="mt-3 font-mono text-3xl font-semibold tracking-tight text-foreground md:text-[34px]">
+            {agent.totalPredictions}
+          </p>
+        </div>
+        <div className="terminal-surface px-4 py-4 md:px-5 md:py-5">
+          <p className="terminal-heading">Total Staked</p>
+          <p className="mt-3 font-mono text-3xl font-semibold tracking-tight text-foreground md:text-[34px]">
+            {Math.round(totalStaked).toLocaleString()} HBAR
+          </p>
+        </div>
+      </section>
 
-        {/* Timeline */}
-        <motion.div
-           initial={{ opacity: 0, y: 10 }}
-           animate={{ opacity: 1, y: 0 }}
-           transition={{ delay: 0.15 }}
-           className="rounded-2xl border border-border bg-card p-6 flex flex-col h-[350px]"
-        >
-          <div className="mb-4">
-            <h2 className="text-lg font-bold text-foreground">Live Intelligence Feed</h2>
-            <p className="text-xs text-muted-foreground mt-1">Real-time HCS verification log</p>
-          </div>
-          <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin">
-            <IntelligenceTimeline limit={20} filters={{ agentName: agent.name }} title="" hideTitle={true} />
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Prediction History Table */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="rounded-2xl border border-border bg-card p-6"
-      >
-        <div className="mb-6 flex items-center justify-between">
+      <section className="terminal-surface overflow-hidden">
+        <div className="flex items-end justify-between border-b border-border px-5 py-4 md:px-6">
           <div>
-            <h2 className="text-lg font-bold text-foreground">Prediction History</h2>
-            <p className="text-xs text-muted-foreground mt-1">All commitments and reveals verified by Hedera Consensus Service</p>
+            <p className="section-kicker">Signals</p>
+            <p className="section-title mt-1">Prediction Trail</p>
           </div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+            On-chain + HCS linked
+          </p>
         </div>
-        {isFeedLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="px-5 py-3 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Round</th>
+                <th className="px-5 py-3 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Direction</th>
+                <th className="px-5 py-3 text-right font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Confidence</th>
+                <th className="px-5 py-3 text-right font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">UTC</th>
+                <th className="px-5 py-3 text-right font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Proof</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isFeedLoading ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-12 text-center">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
+                  </td>
+                </tr>
+              ) : signalRows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                    No prediction signals indexed for this agent yet.
+                  </td>
+                </tr>
+              ) : (
+                signalRows.map((row) => (
+                  <tr key={row.key} className="border-b border-border/80 transition-colors hover:bg-card/70 last:border-b-0">
+                    <td className="px-5 py-3 font-mono text-sm text-foreground">
+                      {row.roundId != null ? (
+                        <Link href={`/round/${row.roundId}`} className="hover:text-secondary">
+                          #{row.roundId}
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className={`px-5 py-3 font-mono text-sm ${row.direction === "UP" ? "text-secondary" : row.direction === "DOWN" ? "text-destructive" : "text-muted-foreground"}`}>
+                      {row.direction}
+                    </td>
+                    <td className="px-5 py-3 text-right font-mono text-sm text-foreground">
+                      {row.confidence != null ? `${row.confidence.toFixed(0)}%` : "—"}
+                    </td>
+                    <td className="px-5 py-3 text-right font-mono text-sm text-muted-foreground">
+                      {formatUtcTime(row.timestampIso)}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      {row.proofHref ? (
+                        <a
+                          href={row.proofHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
+                        >
+                          Link
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : (
+                        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="terminal-surface px-5 py-5 md:px-6 md:py-6">
+        <div className="mb-4 flex items-end justify-between border-b border-border pb-4">
+          <div>
+            <p className="section-kicker">Consensus Trail</p>
+            <p className="section-title mt-1">Event Log</p>
           </div>
-        ) : predictions.length > 0 ? (
-          <PredictionTable predictions={predictions} />
-        ) : (
-          <div className="text-sm text-muted-foreground py-12 text-center rounded-xl bg-muted/20 border border-dashed border-border">
-            No verified prediction history available yet for this agent.
-          </div>
-        )}
-      </motion.div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">HCS + EVM</p>
+        </div>
+
+        <div className="space-y-1 rounded-sm border border-border bg-card p-3">
+          {sortedTimeline.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No timeline events for this agent yet.</p>
+          ) : (
+            sortedTimeline.map((event) => {
+              const href = timelineProofHref(event);
+              return (
+                <div
+                  key={event.id}
+                  className="grid grid-cols-[88px_1fr_auto] items-start gap-3 border-b border-border/70 py-2 last:border-b-0"
+                >
+                  <p className="font-mono text-[11px] text-muted-foreground">{formatUtcTime(event.timestamp)}</p>
+                  <p className="font-mono text-[12px] text-foreground">{event.message}</p>
+                  {href ? (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
+                    >
+                      Link
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : (
+                    <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                      —
+                    </span>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </section>
     </div>
   );
 }

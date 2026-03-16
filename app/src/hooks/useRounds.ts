@@ -4,6 +4,22 @@ import { getProvider } from '@/lib/hedera';
 import { CONTRACT_ADDRESSES, PREDICTION_MARKET_ABI } from '@/lib/contracts';
 import { Round, Commitment } from '@/lib/types';
 
+function mapRoundFromContract(roundId: number, data: any): Round {
+    return {
+        id: roundId,
+        startPrice: Number(data.startPrice) / 1e8, // Convert from Hashio 8 decimals
+        endPrice: Number(data.endPrice) / 1e8,
+        commitDeadline: Number(data.commitDeadline),
+        revealDeadline: Number(data.revealDeadline),
+        resolveAfter: Number(data.resolveAfter),
+        entryFee: data.entryFee,
+        status: Number(data.status) as 0 | 1 | 2 | 3, // 0=Committing, 1=Revealing, 2=Resolved, 3=Cancelled
+        outcome: Number(data.outcome) as 0 | 1,
+        participantCount: Number(data.participantCount),
+        revealedCount: Number(data.revealedCount)
+    };
+}
+
 export function useCurrentRound() {
     return useQuery({
         queryKey: ['currentRound'],
@@ -28,20 +44,7 @@ export function useCurrentRound() {
 
                 // Fetch the latest round
                 const data = await market.getRound(count);
-
-                return {
-                    id: count,
-                    startPrice: Number(data.startPrice) / 1e8, // Convert from Hashio 8 decimals
-                    endPrice: Number(data.endPrice) / 1e8,
-                    commitDeadline: Number(data.commitDeadline),
-                    revealDeadline: Number(data.revealDeadline),
-                    resolveAfter: Number(data.resolveAfter),
-                    entryFee: data.entryFee,
-                    status: Number(data.status) as 0 | 1 | 2 | 3, // 0=Committing, 1=Revealing, 2=Resolved, 3=Cancelled
-                    outcome: Number(data.outcome) as 0 | 1,
-                    participantCount: Number(data.participantCount),
-                    revealedCount: Number(data.revealedCount)
-                };
+                return mapRoundFromContract(count, data);
             } catch (err) {
                 console.error("Failed to fetch current round:", err);
                 throw err;
@@ -71,20 +74,7 @@ export function useRound(roundId: number) {
 
             try {
                 const data = await market.getRound(roundId);
-
-                return {
-                    id: roundId,
-                    startPrice: Number(data.startPrice) / 1e8,
-                    endPrice: Number(data.endPrice) / 1e8,
-                    commitDeadline: Number(data.commitDeadline),
-                    revealDeadline: Number(data.revealDeadline),
-                    resolveAfter: Number(data.resolveAfter),
-                    entryFee: data.entryFee,
-                    status: Number(data.status) as 0 | 1 | 2 | 3,
-                    outcome: Number(data.outcome) as 0 | 1,
-                    participantCount: Number(data.participantCount),
-                    revealedCount: Number(data.revealedCount)
-                };
+                return mapRoundFromContract(roundId, data);
             } catch (err) {
                 console.error(`Failed to fetch round ${roundId}:`, err);
                 throw err;
@@ -135,5 +125,45 @@ export function useCommitments(roundId: number, agentIds: number[], roundStatus?
         },
         enabled: !!roundId && agentIds.length > 0,
         refetchInterval: (roundStatus === 0 || roundStatus === 1) ? 5000 : 15000,
+    });
+}
+
+export function useRoundsHistory(limit: number = 100) {
+    return useQuery({
+        queryKey: ['roundsHistory', limit],
+        queryFn: async (): Promise<Round[]> => {
+            const provider = getProvider();
+
+            if (!CONTRACT_ADDRESSES.predictionMarket) {
+                throw new Error("PredictionMarket address not configured");
+            }
+
+            const market = new ethers.Contract(
+                CONTRACT_ADDRESSES.predictionMarket,
+                PREDICTION_MARKET_ABI,
+                provider
+            );
+
+            const roundCountRaw = await market.getRoundCount();
+            const roundCount = Number(roundCountRaw);
+            if (roundCount === 0) return [];
+
+            const take = Math.min(limit, roundCount);
+            const ids = Array.from({ length: take }, (_, idx) => roundCount - idx);
+
+            const rounds = await Promise.all(
+                ids.map(async (id) => {
+                    try {
+                        const data = await market.getRound(id);
+                        return mapRoundFromContract(id, data);
+                    } catch {
+                        return null;
+                    }
+                })
+            );
+
+            return rounds.filter((r): r is Round => r !== null);
+        },
+        refetchInterval: 15000,
     });
 }

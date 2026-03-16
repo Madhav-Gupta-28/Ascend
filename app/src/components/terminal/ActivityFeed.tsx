@@ -11,39 +11,39 @@ const fallback: TimelineEvent[] = [
     id: "fallback-1",
     eventType: "LEADERBOARD_CHANGED",
     message: "Sentinel CredScore -70",
-    timestamp: new Date().toISOString(),
+    timestamp: "2026-03-16T15:58:41.000Z",
   },
   {
     id: "fallback-2",
     eventType: "LEADERBOARD_CHANGED",
     message: "Meridian CredScore -74",
-    timestamp: new Date().toISOString(),
+    timestamp: "2026-03-16T15:58:44.000Z",
   },
   {
     id: "fallback-3",
     eventType: "ROUND_CREATED",
     message: "Round #842 opened HBAR/USD",
-    timestamp: new Date().toISOString(),
+    timestamp: "2026-03-16T15:59:02.000Z",
   },
   {
     id: "fallback-4",
     eventType: "PREDICTION_COMMITTED",
     message: "Pulse committed prediction",
-    timestamp: new Date().toISOString(),
+    timestamp: "2026-03-16T15:59:17.000Z",
   },
   {
     id: "fallback-5",
     eventType: "AGENT_REASONING_PUBLISHED",
     message: "Oracle reasoning submitted",
-    timestamp: new Date().toISOString(),
+    timestamp: "2026-03-16T15:59:33.000Z",
   },
 ];
 
 function formatTs(iso: string): string {
   const d = new Date(iso);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  const ss = String(d.getSeconds()).padStart(2, "0");
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  const ss = String(d.getUTCSeconds()).padStart(2, "0");
   return `[${hh}:${mm}:${ss}]`;
 }
 

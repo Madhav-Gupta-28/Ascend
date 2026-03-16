@@ -39,27 +39,50 @@ export function getProvider(): ethers.JsonRpcProvider {
 
 export const MIRROR_NODE_URL = process.env.NEXT_PUBLIC_HEDERA_MIRROR_NODE || `https://${HEDERA_NETWORK}.mirrornode.hedera.com`;
 
+function normalizeMirrorNodeBase(baseUrl: string): string {
+    const trimmed = String(baseUrl || "").trim().replace(/\/+$/, "");
+    if (!trimmed) return `https://${HEDERA_NETWORK}.mirrornode.hedera.com`;
+    return trimmed.endsWith("/api/v1") ? trimmed.slice(0, -7) : trimmed;
+}
+
+const MIRROR_NODE_BASE = normalizeMirrorNodeBase(MIRROR_NODE_URL);
+
 /**
  * Fetch messages from an HCS topic via Mirror Node
  */
 export async function fetchTopicMessages(topicId: string, limit = 100, order = 'desc') {
     if (!topicId) return [];
 
-    try {
-        const response = await fetch(
-            `${MIRROR_NODE_URL}/api/v1/topics/${topicId}/messages?limit=${limit}&order=${order}`
-        );
+    const safeTopicId = encodeURIComponent(topicId);
+    const fallbackMirrorBase = `https://${HEDERA_NETWORK}.mirrornode.hedera.com`;
 
-        if (!response.ok) {
-            throw new Error(`Mirror node error: ${response.status}`);
+    const candidateUrls = [
+        `${MIRROR_NODE_BASE}/api/v1/topics/${safeTopicId}/messages?limit=${limit}&order=${order}`,
+        ...(typeof window !== "undefined"
+            ? [`/api/mirror/topics/${safeTopicId}/messages?limit=${limit}&order=${order}`]
+            : []),
+        ...(MIRROR_NODE_BASE !== fallbackMirrorBase
+            ? [`${fallbackMirrorBase}/api/v1/topics/${safeTopicId}/messages?limit=${limit}&order=${order}`]
+            : []),
+    ];
+
+    for (const url of candidateUrls) {
+        try {
+            const response = await fetch(url, {
+                signal: AbortSignal.timeout(10_000),
+                cache: "no-store",
+            });
+            if (!response.ok) continue;
+            const data = await response.json();
+            if (Array.isArray(data?.messages)) {
+                return data.messages;
+            }
+        } catch {
+            // Move to next URL candidate quietly.
         }
-
-        const data = await response.json();
-        return data.messages || [];
-    } catch (err) {
-        console.error(`Failed to fetch messages for topic ${topicId}:`, err);
-        return [];
     }
+
+    return [];
 }
 
 /**
