@@ -2,8 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
-import { Activity, BarChart3, MessageSquare, Layers, Zap, Bot, Users, Shield } from "lucide-react";
 import WalletConnectButton from "@/components/WalletConnectButton";
 import { useCurrentRound } from "@/hooks/useRounds";
 
@@ -11,12 +9,12 @@ function useNavItems() {
   const { data: round } = useCurrentRound();
   const liveRoundPath = round ? `/round/${round.id}` : "/round/latest";
   return [
-    { path: "/", label: "Intelligence Board", icon: BarChart3 },
-    { path: liveRoundPath, label: "Live Round", icon: Activity },
-    { path: "/agents", label: "Agents", icon: Users },
-    { path: "/staking", label: "Staking", icon: Layers },
-    { path: "/discourse", label: "Discourse", icon: MessageSquare },
-    { path: "/register", label: "Register Agent", icon: Bot },
+    { path: "/", label: "Intelligence Board" },
+    { path: liveRoundPath, label: "Live Round" },
+    { path: "/agents", label: "Agents" },
+    { path: "/staking", label: "Staking" },
+    { path: "/discourse", label: "Discourse" },
+    { path: "/register", label: "Register Agent" },
   ];
 }
 
@@ -26,35 +24,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 border-b border-border bg-background">
         <div className="container flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/20 glow-primary">
-              <Zap className="h-5 w-5 text-primary" />
-            </div>
-            <span className="text-xl font-bold tracking-tight text-foreground">ASCEND</span>
+          <Link href="/" className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-secondary" />
+            <span className="font-display text-sm font-semibold uppercase tracking-[0.07em] text-foreground">Ascend</span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-1">
-            {navItems.map(({ path, label, icon: Icon }) => {
+          <nav className="hidden md:flex items-center gap-1.5">
+            {navItems.map(({ path, label }) => {
               const isActive = pathname === path || (path !== "/" && (pathname || "").startsWith(path.split("/").slice(0, 2).join("/")));
               return (
                 <Link
                   key={path}
                   href={path}
-                  className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${isActive
-                    ? "text-primary bg-primary/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  className={`relative rounded-sm px-2.5 py-2 text-[11px] font-medium uppercase tracking-[0.11em] transition-colors ${isActive
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
                     }`}
                 >
-                  <Icon className="h-4 w-4" />
                   {label}
                   {isActive && (
-                    <motion.div
-                      layoutId="nav-indicator"
-                      className="absolute inset-0 rounded-lg border border-primary/30"
-                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    />
+                    <span className="absolute inset-x-2 bottom-0 h-px bg-secondary" />
                   )}
                 </Link>
               );
@@ -66,18 +57,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Mobile nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/90 backdrop-blur-xl">
-        <div className="flex items-center justify-around py-2">
-          {navItems.map(({ path, label, icon: Icon }) => {
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background">
+        <div className="flex items-center justify-around py-2.5">
+          {navItems.map(({ path, label }) => {
             const isActive = pathname === path;
             return (
               <Link
                 key={path}
                 href={path}
-                className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-all ${isActive ? "text-primary" : "text-muted-foreground"
+                className={`flex flex-col items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors ${isActive ? "text-secondary" : "text-muted-foreground"
                   }`}
               >
-                <Icon className="h-5 w-5" />
                 {label.split(" ")[0]}
               </Link>
             );
@@ -85,7 +75,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      <main className="container pb-24 md:pb-8 pt-6">
+      <main className="container pb-24 pt-8 md:pb-8 md:pt-10">
         {children}
       </main>
     </div>
