@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { formatHbar, parseHbar, getProvider } from "@/lib/hedera";
 import { ethers } from "ethers";
 import { useQueryClient } from "@tanstack/react-query";
+import { hashscanTransactionUrl } from "@/lib/explorer";
 
 const PREDEFINED_STRATEGIES = [
   {
@@ -42,8 +43,7 @@ function isExpectedWalletError(message: string): boolean {
 }
 
 function hashscanTxUrl(txIdOrHash: string): string {
-  const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
-  return `https://hashscan.io/${network}/transaction/${encodeURIComponent(txIdOrHash)}`;
+  return hashscanTransactionUrl(txIdOrHash);
 }
 
 function extractTransactionId(result: unknown): string | null {

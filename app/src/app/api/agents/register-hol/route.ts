@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { hashscanTransactionUrl, holAgentProfileUrl } from "@/lib/explorer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,13 +63,8 @@ function pickGuardedRegistryTxId(result: any): string | null {
     return null;
 }
 
-function buildHolProfileUrl(uaid: string | null | undefined): string {
-    if (!uaid) return "https://hol.org/registry";
-    return `https://hol.org/registry/agent/${encodeURIComponent(uaid)}`;
-}
-
 function buildHashscanTxUrl(txIdOrHash: string, network: string): string {
-    return `https://hashscan.io/${network}/transaction/${encodeURIComponent(txIdOrHash)}`;
+    return hashscanTransactionUrl(txIdOrHash, network);
 }
 
 async function fetchGuardedRegistryTransactionId(
@@ -154,27 +150,36 @@ export async function POST(req: NextRequest) {
     // Idempotency: return cached state if already registered
     const existing = loadState(agentName);
     if (existing) {
-        const guardedRegistryTxId =
-            existing.guardedRegistryTxId ??
-            (await fetchGuardedRegistryTransactionId(existing.accountId, network));
-        if (guardedRegistryTxId && existing.guardedRegistryTxId !== guardedRegistryTxId) {
-            saveState(agentName, { ...existing, guardedRegistryTxId });
+        const maybeUpdatedState =
+            onChainAgentId > 0 && existing.onChainAgentId !== onChainAgentId
+                ? { ...existing, onChainAgentId }
+                : existing;
+        if (maybeUpdatedState !== existing) {
+            saveState(agentName, maybeUpdatedState);
         }
-        const profileUrl = buildHolProfileUrl(existing.uaid);
+
+        const guardedRegistryTxId =
+            maybeUpdatedState.guardedRegistryTxId ??
+            (await fetchGuardedRegistryTransactionId(maybeUpdatedState.accountId, network));
+        if (guardedRegistryTxId && maybeUpdatedState.guardedRegistryTxId !== guardedRegistryTxId) {
+            saveState(agentName, { ...maybeUpdatedState, guardedRegistryTxId });
+        }
+        const profileUrl = holAgentProfileUrl(maybeUpdatedState.uaid);
         const guardedRegistryTxHashscanUrl = guardedRegistryTxId
             ? buildHashscanTxUrl(guardedRegistryTxId, network)
             : null;
         return NextResponse.json({
             success: true,
             cached: true,
-            accountId: existing.accountId,
-            inboundTopicId: existing.inboundTopicId,
-            outboundTopicId: existing.outboundTopicId,
-            profileTopicId: existing.profileTopicId,
-            uaid: existing.uaid ?? null,
+            accountId: maybeUpdatedState.accountId,
+            inboundTopicId: maybeUpdatedState.inboundTopicId,
+            outboundTopicId: maybeUpdatedState.outboundTopicId,
+            profileTopicId: maybeUpdatedState.profileTopicId,
+            uaid: maybeUpdatedState.uaid ?? null,
             profileUrl,
             guardedRegistryTxId,
             guardedRegistryTxHashscanUrl,
+            onChainAgentId: maybeUpdatedState.onChainAgentId ?? null,
         });
     }
 
@@ -256,7 +261,7 @@ export async function POST(req: NextRequest) {
 
         console.log(`[HOL-API] ${agentName} registered: account=${state.accountId} inbound=${state.inboundTopicId}`);
 
-        const profileUrl = buildHolProfileUrl(uaid);
+        const profileUrl = holAgentProfileUrl(uaid);
         const guardedRegistryTxHashscanUrl = guardedRegistryTxId
             ? buildHashscanTxUrl(guardedRegistryTxId, network)
             : null;
@@ -272,6 +277,7 @@ export async function POST(req: NextRequest) {
             profileUrl,
             guardedRegistryTxId,
             guardedRegistryTxHashscanUrl,
+            onChainAgentId: state.onChainAgentId ?? null,
         });
     } catch (err: any) {
         console.error(`[HOL-API] Error registering ${agentName}: ${err.message}`);

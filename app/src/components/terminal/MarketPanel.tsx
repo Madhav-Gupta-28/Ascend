@@ -6,6 +6,7 @@ interface MarketPanelProps {
   round: Round | null | undefined;
   agents: Agent[];
   commitments: Record<number, Commitment>;
+  latestEventTimestamp?: string | null;
 }
 
 type AgentSignalDirection = "UP" | "DOWN" | "LOCKED" | "PENDING";
@@ -59,7 +60,7 @@ function signalFromCommitment(commitment: Commitment | undefined): {
   return { direction: "PENDING", confidence: null };
 }
 
-export default function MarketPanel({ round, agents, commitments }: MarketPanelProps) {
+export default function MarketPanel({ round, agents, commitments, latestEventTimestamp = null }: MarketPanelProps) {
   const [nowSec, setNowSec] = useState<number | null>(null);
 
   useEffect(() => {
@@ -91,6 +92,14 @@ export default function MarketPanel({ round, agents, commitments }: MarketPanelP
       model: modelFromAgent(agent),
       agentId: agent.id,
     })) satisfies ArenaPreset[];
+  const activeRoundExists = Boolean(round) && (round?.status === 0 || round?.status === 1);
+  const latestEventSec = latestEventTimestamp
+    ? Math.floor(new Date(latestEventTimestamp).getTime() / 1000)
+    : null;
+  const hcsStreaming =
+    latestEventSec != null && nowSec != null && nowSec - latestEventSec <= 90;
+  const agentsLive = arenaAgents.length > 0;
+  const protocolLive = activeRoundExists && hcsStreaming;
 
   return (
     <Link
@@ -101,6 +110,40 @@ export default function MarketPanel({ round, agents, commitments }: MarketPanelP
         <div>
           <p className="section-kicker">Live Intelligence Round</p>
           <p className="section-title mt-1">Live Round Arena</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] ${
+                protocolLive
+                  ? "border-secondary/40 bg-secondary/10 text-secondary"
+                  : "border-border bg-card text-muted-foreground"
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  protocolLive ? "bg-secondary animate-pulse" : "bg-muted-foreground"
+                }`}
+              />
+              LIVE
+            </span>
+            <span
+              className={`inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] ${
+                hcsStreaming
+                  ? "border-secondary/40 bg-secondary/10 text-secondary"
+                  : "border-border bg-card text-muted-foreground"
+              }`}
+            >
+              HCS Streaming
+            </span>
+            <span
+              className={`inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] ${
+                agentsLive
+                  ? "border-secondary/40 bg-secondary/10 text-secondary"
+                  : "border-border bg-card text-muted-foreground"
+              }`}
+            >
+              Agents Active
+            </span>
+          </div>
           <p className="mt-3 font-mono text-[13px] uppercase tracking-[0.1em] text-muted-foreground">HBAR / USD</p>
           <p className="mt-1 font-mono text-[34px] font-semibold tracking-tight text-foreground">
             {currentPrice != null ? `$${currentPrice.toFixed(5)}` : "--"}

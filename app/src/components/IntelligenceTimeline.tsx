@@ -17,26 +17,16 @@ import {
   ArrowDown,
 } from "lucide-react";
 import { useIntelligenceTimeline, type TimelineFilters } from "@/hooks/useIntelligenceTimeline";
+import { useResolvedTransactionLinks } from "@/hooks/useResolvedTransactionLinks";
 import type { TimelineEventType } from "@/lib/types";
+import { hashscanTopicUrl } from "@/lib/explorer";
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  const ss = String(d.getSeconds()).padStart(2, "0");
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  const ss = String(d.getUTCSeconds()).padStart(2, "0");
   return `${hh}:${mm}:${ss}`;
-}
-
-function getMirrorMessageUrl(topicId: string, sequenceNumber: number): string {
-  if (!topicId || sequenceNumber == null) return "";
-  const base = process.env.NEXT_PUBLIC_HEDERA_MIRROR_NODE || "https://testnet.mirrornode.hedera.com";
-  return `${base}/api/v1/topics/${topicId}/messages/${sequenceNumber}`;
-}
-
-function getHashScanTxUrl(txHash: string): string {
-  if (!txHash) return "";
-  const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
-  return `https://hashscan.io/${network}/transaction/${txHash}`;
 }
 
 const EVENT_ICONS: Record<TimelineEventType, React.ReactNode> = {
@@ -93,23 +83,42 @@ function DetailBadge({ detail }: { detail: string }) {
   return <span className="text-[11px] font-mono text-muted-foreground">{detail}</span>;
 }
 
+function highlightAgent(message: string, agentName?: string): React.ReactNode {
+  const candidate = String(agentName || "").trim();
+  if (!candidate) return message;
+
+  const lowerMessage = message.toLowerCase();
+  const lowerCandidate = candidate.toLowerCase();
+  const index = lowerMessage.indexOf(lowerCandidate);
+  if (index < 0) return message;
+
+  const before = message.slice(0, index);
+  const hit = message.slice(index, index + candidate.length);
+  const after = message.slice(index + candidate.length);
+
+  return (
+    <>
+      {before}
+      <span className="font-semibold text-foreground">{hit}</span>
+      {after}
+    </>
+  );
+}
+
 function TimelineEventCard({
   event,
   index,
+  getTransactionUrl,
 }: {
   event: import("@/lib/types").TimelineEvent;
   index: number;
+  getTransactionUrl: (id: string | null | undefined) => string | null;
 }) {
-  const mirrorUrl =
-    event.topicId != null && event.sequenceNumber != null
-      ? getMirrorMessageUrl(event.topicId, event.sequenceNumber)
-      : "";
-  const txUrl = event.transactionHash ? getHashScanTxUrl(event.transactionHash) : "";
-  const verifiedHref = mirrorUrl || txUrl;
+  const txUrl = getTransactionUrl(event.transactionHash) || "";
+  const topicUrl = event.topicId ? hashscanTopicUrl(event.topicId) : "";
+  const verifiedHref = txUrl || topicUrl;
 
   const timestamp = formatTime(event.timestamp);
-  const mainLine = event.message;
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
@@ -120,7 +129,7 @@ function TimelineEventCard({
       <div className="flex items-start gap-2">
         <span className="text-muted-foreground/80">[{timestamp}]</span>
         <span className="truncate">
-          {mainLine}
+          {highlightAgent(event.message, event.agentName)}
           {event.detail && (
             <>
               {" "}
@@ -136,7 +145,7 @@ function TimelineEventCard({
                 rel="noreferrer"
                 className="text-[10px] text-primary/80 hover:text-primary underline underline-offset-2"
               >
-                (proof)
+                View on Hashscan
               </a>
             </>
           )}
@@ -164,6 +173,14 @@ export default function IntelligenceTimeline({
 }: IntelligenceTimelineProps) {
   const { data: events = [], isLoading, error } = useIntelligenceTimeline(limit, filters);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const txHashes = useMemo(
+    () =>
+      events
+        .map((event) => event.transactionHash || null)
+        .filter((value): value is string => typeof value === "string" && value.length > 0),
+    [events],
+  );
+  const { getTransactionUrl } = useResolvedTransactionLinks(txHashes);
 
   const hasEvents = events.length > 0;
 
@@ -220,7 +237,7 @@ export default function IntelligenceTimeline({
           className={`space-y-1.5 max-h-[480px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent`}
         >
           {events.map((event, i) => (
-            <TimelineEventCard key={event.id} event={event} index={i} />
+            <TimelineEventCard key={event.id} event={event} index={i} getTransactionUrl={getTransactionUrl} />
           ))}
         </div>
       )}

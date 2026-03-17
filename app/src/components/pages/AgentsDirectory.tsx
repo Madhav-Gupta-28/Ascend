@@ -9,12 +9,15 @@ import { Loader2, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck } from "lu
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 import { formatHbar } from "@/lib/hedera";
 import { CONTRACT_ADDRESSES } from "@/lib/contracts";
+import type { Agent } from "@/lib/types";
+import { hashscanAddressUrl } from "@/lib/explorer";
 
 interface HOLAgentInfo {
   uaid?: string;
   name: string;
   accountId?: string;
-  profileUrl?: string;
+  profileUrl?: string | null;
+  onChainAgentId?: number | null;
 }
 
 function formatCompact(value: number): string {
@@ -23,15 +26,11 @@ function formatCompact(value: number): string {
   return value.toString();
 }
 
-function hashscanAddressUrl(address: string): string {
-  const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
-  return `https://hashscan.io/${network}/address/${address}`;
-}
-
 export default function AgentsDirectory() {
   const { data: agents = [], isLoading } = useAgents();
   const { data: tvl = 0n } = useTotalValueLocked();
   const [holAgents, setHolAgents] = useState<HOLAgentInfo[]>([]);
+  const [onChainRegistryHref, setOnChainRegistryHref] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "active">("all");
 
   useEffect(() => {
@@ -43,6 +42,33 @@ export default function AgentsDirectory() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const address = CONTRACT_ADDRESSES.agentRegistry;
+    if (!address) {
+      setOnChainRegistryHref(null);
+      return;
+    }
+
+    fetch(`/api/mirror/entities/resolve?kind=contract&id=${encodeURIComponent(address)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (typeof data?.hashscanUrl === "string" && data.hashscanUrl.length > 0) {
+          setOnChainRegistryHref(data.hashscanUrl);
+          return;
+        }
+        setOnChainRegistryHref(hashscanAddressUrl(address));
+      })
+      .catch(() => {
+        if (!cancelled) setOnChainRegistryHref(hashscanAddressUrl(address));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const activeAgents = agents.filter((agent) => agent.active);
   const totalPredictions = agents.reduce((acc, agent) => acc + agent.totalPredictions, 0);
   const tvlHbar = Number(formatHbar(tvl));
@@ -51,28 +77,29 @@ export default function AgentsDirectory() {
     if (b.credScore !== a.credScore) return b.credScore - a.credScore;
     return b.accuracy - a.accuracy;
   });
-  const onChainRegistryHref = CONTRACT_ADDRESSES.agentRegistry
-    ? hashscanAddressUrl(CONTRACT_ADDRESSES.agentRegistry)
-    : null;
-
   const filteredAgents =
     filter === "active"
       ? sortedAgents.filter((a) => a.totalPredictions > 0 || a.credScore !== 0)
       : sortedAgents;
 
-  const getHolInfo = (agentName: string): HOLAgentInfo | undefined => {
+  const getHolInfo = (agent: Agent): HOLAgentInfo | undefined => {
     const normalize = (value: string) =>
       value
         .toLowerCase()
         .replace(/^ascend:\s*/, "")
         .trim();
-    const lowerName = normalize(agentName);
-    return holAgents.find(
-      (agent) => {
-        const holName = normalize(agent.name || "");
-        return holName === lowerName || holName.includes(lowerName) || lowerName.includes(holName);
-      }
+
+    const idMatch = holAgents.find(
+      (entry) => entry.onChainAgentId === agent.id && typeof entry.profileUrl === "string" && entry.profileUrl.length > 0
     );
+    if (idMatch) return idMatch;
+
+    const lowerName = normalize(agent.name);
+    const nameMatches = holAgents.filter((entry) => {
+      const holName = normalize(entry.name || "");
+      return holName === lowerName && typeof entry.profileUrl === "string" && entry.profileUrl.length > 0;
+    });
+    return nameMatches.length === 1 ? nameMatches[0] : undefined;
   };
 
   if (isLoading) {
@@ -109,7 +136,7 @@ export default function AgentsDirectory() {
               rel="noreferrer"
               className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
             >
-              HOL
+              HOL Directory
               <ExternalLink className="h-3 w-3" />
             </a>
             <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-secondary/70">+</span>
@@ -120,7 +147,7 @@ export default function AgentsDirectory() {
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
               >
-                On-chain
+                AgentRegistry
                 <ExternalLink className="h-3 w-3" />
               </a>
             ) : (
@@ -197,8 +224,11 @@ export default function AgentsDirectory() {
               ) : (
                 filteredAgents.map((agent, index) => {
                   const avatar = getAgentDirectoryEntry(agent.name)?.avatar ?? "🤖";
-                  const holInfo = getHolInfo(agent.name);
-                  const holHref = holInfo?.profileUrl || "https://hol.org/registry";
+                  const holInfo = getHolInfo(agent);
+                  const holHref =
+                    typeof holInfo?.profileUrl === "string" && holInfo.profileUrl.length > 0
+                      ? holInfo.profileUrl
+                      : null;
                   const staked = Number(formatHbar(agent.totalStaked));
                   const model = agent.description ? agent.description.split(".")[0] : "Autonomous Strategy";
 
@@ -210,7 +240,7 @@ export default function AgentsDirectory() {
                           <span className="text-xl">{avatar}</span>
                           <div>
                             <p className="text-sm font-semibold text-foreground">{agent.name}</p>
-                            {holInfo ? (
+                            {holHref ? (
                               <a
                                 href={holHref}
                                 target="_blank"
@@ -223,7 +253,7 @@ export default function AgentsDirectory() {
                               </a>
                             ) : (
                               <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                                On-chain Registered
+                                HOL Pending
                               </p>
                             )}
                           </div>

@@ -1,7 +1,10 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { TimelineEvent } from "@/lib/types";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { ExternalLink } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useResolvedTransactionLinks } from "@/hooks/useResolvedTransactionLinks";
+import { hashscanTopicUrl } from "@/lib/explorer";
 
 interface ActivityFeedProps {
   events: TimelineEvent[];
@@ -75,14 +78,68 @@ function eventTag(type: TimelineEvent["eventType"]): string {
   }
 }
 
+function highlightAgentMessage(message: string, agentName?: string): React.ReactNode {
+  const normalizedAgent = String(agentName || "").trim();
+  if (!normalizedAgent) return message;
+
+  const lowerMessage = message.toLowerCase();
+  const lowerAgent = normalizedAgent.toLowerCase();
+  const index = lowerMessage.indexOf(lowerAgent);
+  if (index < 0) return message;
+
+  const before = message.slice(0, index);
+  const exact = message.slice(index, index + normalizedAgent.length);
+  const after = message.slice(index + normalizedAgent.length);
+
+  return (
+    <>
+      {before}
+      <span className="font-semibold text-foreground">{exact}</span>
+      {after}
+    </>
+  );
+}
+
 export default function ActivityFeed({ events }: ActivityFeedProps) {
   const [mounted, setMounted] = useState(false);
+  const [nowMs, setNowMs] = useState<number | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
+    setNowMs(Date.now());
+    const interval = setInterval(() => setNowMs(Date.now()), 5000);
+    return () => clearInterval(interval);
   }, []);
 
-  const rows = (mounted ? (events.length > 0 ? events : fallback) : fallback).slice(0, 18);
+  const rows = useMemo(
+    () => (mounted ? (events.length > 0 ? events : fallback) : fallback).slice(0, 18),
+    [mounted, events],
+  );
+  const txHashes = useMemo(
+    () =>
+      rows
+        .map((event) => event.transactionHash || null)
+        .filter((value): value is string => typeof value === "string" && value.length > 0),
+    [rows],
+  );
+  const { getTransactionUrl } = useResolvedTransactionLinks(txHashes);
+
+  const isStreaming = useMemo(() => {
+    if (!mounted || !nowMs || events.length === 0) return false;
+    const newest = new Date(events[0].timestamp).getTime();
+    if (!Number.isFinite(newest)) return false;
+    return nowMs - newest <= 90_000;
+  }, [mounted, nowMs, events]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    const viewport = scrollContainerRef.current?.querySelector(
+      "[data-radix-scroll-area-viewport]",
+    ) as HTMLElement | null;
+    if (!viewport) return;
+    viewport.scrollTo({ top: 0, behavior: "smooth" });
+  }, [mounted, rows[0]?.id]);
 
   return (
     <section className="terminal-surface px-5 py-5 md:px-6 md:py-6">
@@ -92,9 +149,19 @@ export default function ActivityFeed({ events }: ActivityFeedProps) {
           <p className="section-title mt-1">Protocol Activity</p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="inline-flex items-center gap-2 rounded-sm border border-secondary/40 bg-secondary/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary">
-            <span className="h-1.5 w-1.5 rounded-full bg-secondary animate-pulse-glow" />
-            Feed Online
+          <span
+            className={`inline-flex items-center gap-2 rounded-sm border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] ${
+              isStreaming
+                ? "border-secondary/40 bg-secondary/10 text-secondary"
+                : "border-border bg-card text-muted-foreground"
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                isStreaming ? "bg-secondary animate-pulse-glow" : "bg-muted-foreground"
+              }`}
+            />
+            {isStreaming ? "HCS Streaming" : "Awaiting Stream"}
           </span>
           <Link
             href="/round/latest"
@@ -105,25 +172,50 @@ export default function ActivityFeed({ events }: ActivityFeedProps) {
         </div>
       </div>
 
-      <ScrollArea className="mt-4 h-[300px] rounded-sm border border-border bg-background">
-        <div className="px-3 py-2 md:px-4">
-          {rows.map((event, index) => {
-            const tag = eventTag(event.eventType);
-            return (
-              <div
-                key={`${event.id}-${index}`}
-                className="grid grid-cols-[84px_64px_1fr] items-start gap-2 border-b border-border/80 py-2.5 last:border-b-0"
-              >
-                <p className="font-mono text-[11px] text-muted-foreground">{formatTs(event.timestamp)}</p>
-                <span className="inline-flex h-5 items-center justify-center rounded-sm border border-border bg-card px-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
-                  {tag}
-                </span>
-                <p className={`font-mono text-[12px] leading-5 ${tone(event.message)}`}>{event.message}</p>
-              </div>
-            );
-          })}
-        </div>
-      </ScrollArea>
+      <div ref={scrollContainerRef}>
+        <ScrollArea className="mt-4 h-[300px] rounded-sm border border-border bg-background">
+          <div className="px-3 py-2 md:px-4">
+            {rows.map((event, index) => {
+              const tag = eventTag(event.eventType);
+              const proofHref =
+                event.transactionHash
+                  ? getTransactionUrl(event.transactionHash)
+                  : event.topicId
+                    ? hashscanTopicUrl(event.topicId)
+                    : null;
+              return (
+                <div
+                  key={`${event.id}-${index}`}
+                  className="grid grid-cols-[84px_64px_1fr_auto] items-start gap-2 border-b border-border/80 py-2.5 last:border-b-0"
+                >
+                  <p className="font-mono text-[11px] text-muted-foreground">{formatTs(event.timestamp)}</p>
+                  <span className="inline-flex h-5 items-center justify-center rounded-sm border border-border bg-card px-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
+                    {tag}
+                  </span>
+                  <p className={`font-mono text-[12px] leading-5 ${tone(event.message)}`}>
+                    {highlightAgentMessage(event.message, event.agentName)}
+                  </p>
+                  {proofHref ? (
+                    <a
+                      href={proofHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
+                    >
+                      Hashscan
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : (
+                    <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                      —
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      </div>
     </section>
   );
 }

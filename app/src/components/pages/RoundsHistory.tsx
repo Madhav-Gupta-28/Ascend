@@ -6,6 +6,7 @@ import { ExternalLink, Loader2 } from "lucide-react";
 import { useMemo } from "react";
 import { useRoundsHistory } from "@/hooks/useRounds";
 import { useIntelligenceTimeline } from "@/hooks/useIntelligenceTimeline";
+import { useResolvedTransactionLinks } from "@/hooks/useResolvedTransactionLinks";
 import type { Round } from "@/lib/types";
 
 function statusText(round: Round): string {
@@ -28,11 +29,6 @@ function statusClasses(round: Round): string {
   return "border-border bg-card text-muted-foreground";
 }
 
-function hashscanTxUrl(txHash: string): string {
-  const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
-  return `https://hashscan.io/${network}/transaction/${txHash}`;
-}
-
 function price(value: number): string {
   return `$${value.toFixed(4)}`;
 }
@@ -41,6 +37,14 @@ export default function RoundsHistory() {
   const router = useRouter();
   const { data: rounds = [], isLoading } = useRoundsHistory(150);
   const { data: timelineEvents = [] } = useIntelligenceTimeline(600);
+  const txHashes = useMemo(
+    () =>
+      timelineEvents
+        .map((event) => event.transactionHash || null)
+        .filter((value): value is string => typeof value === "string" && value.length > 0),
+    [timelineEvents],
+  );
+  const { getTransactionUrl } = useResolvedTransactionLinks(txHashes);
 
   const resolvedTxByRoundId = useMemo(() => {
     const map = new Map<number, string>();
@@ -178,7 +182,7 @@ export default function RoundsHistory() {
                           </Link>
                           {txHash ? (
                             <a
-                              href={hashscanTxUrl(txHash)}
+                              href={getTransactionUrl(txHash) || "#"}
                               target="_blank"
                               rel="noreferrer"
                               onClick={(event) => event.stopPropagation()}

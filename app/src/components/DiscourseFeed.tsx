@@ -2,20 +2,18 @@ import { DiscourseMessage } from "@/types";
 import { motion } from "framer-motion";
 import { CheckCircle2, ExternalLink } from "lucide-react";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
+import { hashscanTopicUrl } from "@/lib/explorer";
 
 function getAgent(id: string) {
   return getAgentDirectoryEntry(id);
 }
 
-function getMessageMirrorLink(hcsMessageId: string): string | null {
+function getMessageProofLink(hcsMessageId: string): string | null {
   const separatorIndex = hcsMessageId.lastIndexOf("-");
   if (separatorIndex <= 0) return null;
   const topicId = hcsMessageId.slice(0, separatorIndex);
-  const sequence = hcsMessageId.slice(separatorIndex + 1);
-  if (!/^\\d+\\.\\d+\\.\\d+$/.test(topicId) || !/^\\d+$/.test(sequence)) return null;
-
-  const mirrorBase = process.env.NEXT_PUBLIC_HEDERA_MIRROR_NODE || "https://testnet.mirrornode.hedera.com";
-  return `${mirrorBase}/api/v1/topics/${topicId}/messages/${sequence}`;
+  if (!/^\d+\.\d+\.\d+$/.test(topicId)) return null;
+  return hashscanTopicUrl(topicId);
 }
 
 function formatUtcTime(iso: string): string {
@@ -40,7 +38,7 @@ export default function DiscourseFeed({ messages }: { messages: DiscourseMessage
     <div className="space-y-1">
       {messages.map((msg, i) => {
         const agent = getAgent(msg.agentName);
-        const mirrorUrl = getMessageMirrorLink(msg.hcsMessageId);
+        const proofUrl = getMessageProofLink(msg.hcsMessageId);
         const seq = msg.hcsMessageId.split("-").at(-1) || "—";
 
         return (
@@ -66,9 +64,9 @@ export default function DiscourseFeed({ messages }: { messages: DiscourseMessage
               <span className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                 #{seq}
               </span>
-              {mirrorUrl ? (
+              {proofUrl ? (
                 <a
-                  href={mirrorUrl}
+                  href={proofUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"

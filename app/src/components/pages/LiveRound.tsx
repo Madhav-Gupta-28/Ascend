@@ -7,8 +7,10 @@ import RoundTimer from "@/components/RoundTimer";
 import { useCurrentRound, useRound, useCommitments } from "@/hooks/useRounds";
 import { useAgents } from "@/hooks/useAgents";
 import { useIntelligenceTimeline } from "@/hooks/useIntelligenceTimeline";
+import { useResolvedTransactionLinks } from "@/hooks/useResolvedTransactionLinks";
 import type { Agent, Commitment, Round, TimelineEvent } from "@/lib/types";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
+import { hashscanTopicUrl } from "@/lib/explorer";
 
 interface LiveRoundProps {
   roundId?: number;
@@ -41,25 +43,6 @@ function statusLabel(round: Round): string {
   return "Cancelled";
 }
 
-function hashscanTxUrl(txHash: string): string {
-  const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
-  return `https://hashscan.io/${network}/transaction/${txHash}`;
-}
-
-function mirrorMessageUrl(topicId: string, sequenceNumber: number): string {
-  const base = process.env.NEXT_PUBLIC_HEDERA_MIRROR_NODE || "https://testnet.mirrornode.hedera.com";
-  return `${base}/api/v1/topics/${topicId}/messages/${sequenceNumber}`;
-}
-
-function proofHref(event?: TimelineEvent): string | null {
-  if (!event) return null;
-  if (event.transactionHash) return hashscanTxUrl(event.transactionHash);
-  if (event.topicId && event.sequenceNumber != null) {
-    return mirrorMessageUrl(event.topicId, event.sequenceNumber);
-  }
-  return null;
-}
-
 function outcomeDirection(round: Round): "UP" | "DOWN" {
   return round.outcome === 0 ? "UP" : "DOWN";
 }
@@ -89,6 +72,14 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
   const agentIds = useMemo(() => agents.map((agent) => Number(agent.id)), [agents]);
   const { data: commitments = {} } = useCommitments(round?.id || 0, agentIds, round?.status);
   const { data: timelineEvents = [] } = useIntelligenceTimeline(140, round?.id ? { roundId: round.id } : undefined);
+  const txHashes = useMemo(
+    () =>
+      timelineEvents
+        .map((event) => event.transactionHash || null)
+        .filter((value): value is string => typeof value === "string" && value.length > 0),
+    [timelineEvents],
+  );
+  const { getTransactionUrl } = useResolvedTransactionLinks(txHashes);
 
   if (roundLoading) {
     return (
@@ -123,14 +114,28 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   const roundEventsDesc = [...roundEventsAsc].reverse();
 
-  const createdEvent = roundEventsAsc.find((event) => event.eventType === "COMMIT_PHASE_STARTED");
-  const resolvedEvent = roundEventsDesc.find((event) => event.eventType === "ROUND_RESOLVED");
-  const oracleSourceEvent = resolvedEvent ?? createdEvent;
-  const resolvedProofHref = proofHref(resolvedEvent);
+  const proofHref = (event?: TimelineEvent): string | null => {
+    if (!event) return null;
+    if (event.transactionHash) return getTransactionUrl(event.transactionHash);
+    if (event.topicId) return hashscanTopicUrl(event.topicId);
+    return null;
+  };
 
-  const openPriceHref = proofHref(createdEvent);
-  const closePriceHref = proofHref(resolvedEvent);
-  const oracleHref = proofHref(oracleSourceEvent);
+  const createdEvents = roundEventsAsc.filter((event) => event.eventType === "COMMIT_PHASE_STARTED");
+  const createdEvent = createdEvents[0];
+  const createdTxEvent = createdEvents.find((event) => Boolean(event.transactionHash));
+
+  const resolvedEvents = roundEventsDesc.filter((event) => event.eventType === "ROUND_RESOLVED");
+  const resolvedEvent = resolvedEvents[0];
+  const resolvedTxEvent = resolvedEvents.find((event) => Boolean(event.transactionHash));
+  const resolvedTxHref = resolvedTxEvent?.transactionHash
+    ? getTransactionUrl(resolvedTxEvent.transactionHash)
+    : null;
+
+  const oracleSourceEvent = resolvedTxEvent ?? createdTxEvent ?? resolvedEvent ?? createdEvent;
+  const openPriceHref = proofHref(createdTxEvent ?? createdEvent);
+  const closePriceHref = resolvedTxHref ?? proofHref(resolvedEvent);
+  const oracleHref = resolvedTxHref ?? proofHref(oracleSourceEvent);
 
   const timerPhase = roundPhase(round.status);
   const timerEnd =
@@ -150,9 +155,9 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
           <div>
             <p className="section-kicker">Round Terminal</p>
             <h1 className="section-title mt-1">Round #{round.id}</h1>
-            {round.status === 2 && resolvedProofHref ? (
+            {round.status === 2 && resolvedTxHref ? (
               <a
-                href={resolvedProofHref}
+                href={resolvedTxHref}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-2 inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
@@ -169,9 +174,9 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
 
           <div className="flex flex-col items-start gap-2 md:items-end">
             <RoundTimer endTime={timerEnd} phase={timerPhase} />
-            {resolvedEvent?.transactionHash ? (
+            {resolvedTxHref ? (
               <a
-                href={hashscanTxUrl(resolvedEvent.transactionHash)}
+                href={resolvedTxHref}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
@@ -244,9 +249,9 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
 
           <div className="rounded-sm border border-border bg-card p-4">
             <p className="section-kicker">Round Status</p>
-            {round.status === 2 && resolvedProofHref ? (
+            {round.status === 2 && resolvedTxHref ? (
               <a
-                href={resolvedProofHref}
+                href={resolvedTxHref}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-2 inline-flex items-center gap-1 font-display text-xl uppercase tracking-[-0.018em] text-secondary hover:text-secondary/85"
@@ -293,16 +298,23 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
             const isCorrect =
               resolvedDirection && direction ? direction === resolvedDirection : null;
 
-            const revealEvent = roundEventsDesc.find(
+            const revealEventsForAgent = roundEventsDesc.filter(
               (event) =>
                 event.eventType === "PREDICTION_REVEALED" &&
                 event.agentName?.toLowerCase() === agent.name.toLowerCase()
             );
-            const commitEvent = roundEventsDesc.find(
+            const revealEvent =
+              revealEventsForAgent.find((event) => Boolean(event.transactionHash)) ??
+              revealEventsForAgent[0];
+
+            const commitEventsForAgent = roundEventsDesc.filter(
               (event) =>
                 event.eventType === "PREDICTION_COMMITTED" &&
                 event.agentName?.toLowerCase() === agent.name.toLowerCase()
             );
+            const commitEvent =
+              commitEventsForAgent.find((event) => Boolean(event.transactionHash)) ??
+              commitEventsForAgent[0];
             const proof = proofHref(revealEvent) ?? proofHref(commitEvent);
 
             const avatar = getAgentDirectoryEntry(agent.name)?.avatar ?? "🤖";

@@ -48,7 +48,12 @@ export default function IntelligenceBoard() {
         />
       </div>
 
-      <MarketPanel round={round} agents={agents} commitments={commitments} />
+      <MarketPanel
+        round={round}
+        agents={agents}
+        commitments={commitments}
+        latestEventTimestamp={timelineEvents[0]?.timestamp ?? null}
+      />
 
       <ActivityFeed events={timelineEvents} />
 

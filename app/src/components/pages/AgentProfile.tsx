@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAgent } from "@/hooks/useAgents";
 import { usePredictionsFeed } from "@/hooks/useHCSMessages";
 import { useIntelligenceTimeline } from "@/hooks/useIntelligenceTimeline";
+import { useResolvedTransactionLinks } from "@/hooks/useResolvedTransactionLinks";
 import { CONTRACT_ADDRESSES } from "@/lib/contracts";
 import { formatHbar } from "@/lib/hedera";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 import type { TimelineEvent } from "@/lib/types";
+import { hashscanAddressUrl, hashscanTopicUrl } from "@/lib/explorer";
 
 interface HOLAgentInfo {
   uaid?: string;
@@ -18,7 +20,8 @@ interface HOLAgentInfo {
   accountId?: string;
   inboundTopicId?: string;
   profileTopicId?: string;
-  profileUrl?: string;
+  profileUrl?: string | null;
+  onChainAgentId?: number | null;
 }
 
 interface AgentSignalRow {
@@ -28,26 +31,6 @@ interface AgentSignalRow {
   confidence: number | null;
   timestampIso: string;
   proofHref: string | null;
-}
-
-function hashscanAddressUrl(address: string): string {
-  const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
-  return `https://hashscan.io/${network}/address/${address}`;
-}
-
-function hashscanTxUrl(txHash: string): string {
-  const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
-  return `https://hashscan.io/${network}/transaction/${txHash}`;
-}
-
-function mirrorMessageUrl(topicId: string, sequenceNumber: number): string {
-  const base = process.env.NEXT_PUBLIC_HEDERA_MIRROR_NODE || "https://testnet.mirrornode.hedera.com";
-  return `${base}/api/v1/topics/${topicId}/messages/${sequenceNumber}`;
-}
-
-function mirrorTopicUrl(topicId: string): string {
-  const base = process.env.NEXT_PUBLIC_HEDERA_MIRROR_NODE || "https://testnet.mirrornode.hedera.com";
-  return `${base}/api/v1/topics/${topicId}/messages?limit=1&order=desc`;
 }
 
 function strategyFromName(name: string): string {
@@ -88,15 +71,6 @@ function formatUtcTime(iso: string): string {
   return `${hh}:${mm}:${ss}`;
 }
 
-function timelineProofHref(event?: TimelineEvent): string | null {
-  if (!event) return null;
-  if (event.transactionHash) return hashscanTxUrl(event.transactionHash);
-  if (event.topicId && event.sequenceNumber != null) {
-    return mirrorMessageUrl(event.topicId, event.sequenceNumber);
-  }
-  return null;
-}
-
 export default function AgentProfile() {
   const params = useParams();
   const idStr = typeof params?.id === "string" ? params.id : "";
@@ -108,7 +82,17 @@ export default function AgentProfile() {
     220,
     agent?.name ? { agentName: agent.name } : undefined,
   );
+  const timelineTxHashes = useMemo(
+    () =>
+      timelineEvents
+        .map((event) => event.transactionHash || null)
+        .filter((value): value is string => typeof value === "string" && value.length > 0),
+    [timelineEvents],
+  );
+  const { getTransactionUrl } = useResolvedTransactionLinks(timelineTxHashes);
   const [holInfo, setHolInfo] = useState<HOLAgentInfo | null>(null);
+  const [ownerHref, setOwnerHref] = useState<string | null>(null);
+  const [registryHref, setRegistryHref] = useState<string | null>(null);
 
   useEffect(() => {
     setHolInfo(null);
@@ -122,15 +106,164 @@ export default function AgentProfile() {
       .then((res) => res.json())
       .then((data) => {
         if (!Array.isArray(data?.agents)) return;
+        const byAgentId = data.agents.find(
+          (entry: HOLAgentInfo) =>
+            entry.onChainAgentId === agent.id &&
+            typeof entry.profileUrl === "string" &&
+            entry.profileUrl.length > 0,
+        );
+        if (byAgentId) {
+          setHolInfo(byAgentId);
+          return;
+        }
+
         const lowerName = normalize(agent.name);
-        const info = data.agents.find((entry: HOLAgentInfo) => {
+        const nameMatches = data.agents.filter((entry: HOLAgentInfo) => {
           const candidate = normalize(entry.name || "");
-          return candidate === lowerName || candidate.includes(lowerName) || lowerName.includes(candidate);
+          return (
+            candidate === lowerName &&
+            typeof entry.profileUrl === "string" &&
+            entry.profileUrl.length > 0
+          );
         });
-        if (info) setHolInfo(info);
+        if (nameMatches.length === 1) {
+          setHolInfo(nameMatches[0]);
+        }
       })
       .catch(() => {});
-  }, [agent?.name]);
+  }, [agent?.id, agent?.name]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const address = CONTRACT_ADDRESSES.agentRegistry;
+    if (!address) {
+      setRegistryHref(null);
+      return;
+    }
+
+    fetch(`/api/mirror/entities/resolve?kind=contract&id=${encodeURIComponent(address)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (typeof data?.hashscanUrl === "string" && data.hashscanUrl.length > 0) {
+          setRegistryHref(data.hashscanUrl);
+          return;
+        }
+        setRegistryHref(hashscanAddressUrl(address));
+      })
+      .catch(() => {
+        if (!cancelled) setRegistryHref(hashscanAddressUrl(address));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!agent?.owner) {
+      setOwnerHref(null);
+      return;
+    }
+
+    fetch(`/api/mirror/entities/resolve?kind=account&id=${encodeURIComponent(agent.owner)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (typeof data?.hashscanUrl === "string" && data.hashscanUrl.length > 0) {
+          setOwnerHref(data.hashscanUrl);
+          return;
+        }
+        setOwnerHref(hashscanAddressUrl(agent.owner));
+      })
+      .catch(() => {
+        if (!cancelled) setOwnerHref(hashscanAddressUrl(agent.owner));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agent?.owner]);
+
+  const timelineProofHref = useCallback(
+    (event?: TimelineEvent): string | null => {
+      if (!event) return null;
+      if (event.transactionHash) return getTransactionUrl(event.transactionHash);
+      if (event.topicId) return hashscanTopicUrl(event.topicId);
+      return null;
+    },
+    [getTransactionUrl],
+  );
+
+  const roundProofByRound = useMemo(() => {
+    const map = new Map<number, string>();
+    const prioritized = [...timelineEvents]
+      .filter((event) => event.roundId != null)
+      .sort((a, b) => {
+        const aWeight = a.eventType === "PREDICTION_REVEALED" ? 0 : 1;
+        const bWeight = b.eventType === "PREDICTION_REVEALED" ? 0 : 1;
+        if (aWeight !== bWeight) return aWeight - bWeight;
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+
+    for (const event of prioritized) {
+      const roundId = event.roundId;
+      if (roundId == null || map.has(roundId)) continue;
+      const href = timelineProofHref(event);
+      if (href) map.set(roundId, href);
+    }
+
+    return map;
+  }, [timelineEvents, timelineProofHref]);
+
+  const signalRows = useMemo((): AgentSignalRow[] => {
+    if (!agent) return [];
+
+    const rows: AgentSignalRow[] = [];
+    for (const msg of feed) {
+      const parsedAgentId = String(msg.parsed.agentId ?? "").toLowerCase();
+      const isSameAgent =
+        parsedAgentId === String(agent.id) || parsedAgentId === agent.name.toLowerCase();
+      if (!isSameAgent) continue;
+
+      const parsedRoundId =
+        typeof msg.parsed.roundId === "number"
+          ? msg.parsed.roundId
+          : typeof msg.parsed.roundId === "string"
+            ? Number.parseInt(msg.parsed.roundId, 10)
+            : NaN;
+      const roundId = Number.isFinite(parsedRoundId) ? parsedRoundId : undefined;
+
+      const confidenceValue =
+        typeof msg.parsed.confidence === "number"
+          ? msg.parsed.confidence
+          : typeof msg.parsed.confidence === "string"
+            ? Number.parseFloat(msg.parsed.confidence)
+            : null;
+
+      const fallbackProof =
+        msg.raw.topicId ? hashscanTopicUrl(msg.raw.topicId) : null;
+
+      rows.push({
+        key: `${msg.raw.topicId}-${msg.raw.sequenceNumber}-${roundId ?? "x"}`,
+        roundId,
+        direction: directionFromUnknown(msg.parsed.direction),
+        confidence: Number.isFinite(confidenceValue as number) ? confidenceValue : null,
+        timestampIso: asIsoFromConsensus(msg.raw.consensusTimestamp),
+        proofHref: (roundId != null ? roundProofByRound.get(roundId) : null) ?? fallbackProof,
+      });
+    }
+
+    rows.sort((a, b) => new Date(b.timestampIso).getTime() - new Date(a.timestampIso).getTime());
+    return rows.slice(0, 40);
+  }, [agent, feed, roundProofByRound]);
+
+  const sortedTimeline = useMemo(() => {
+    const events = [...timelineEvents];
+    events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return events.slice(0, 40);
+  }, [timelineEvents]);
 
   if (isAgentLoading) {
     return (
@@ -161,80 +294,10 @@ export default function AgentProfile() {
   const avatar = getAgentDirectoryEntry(agent.name)?.avatar ?? "🤖";
   const strategy = strategyFromName(agent.name);
   const totalStaked = Number(formatHbar(agent.totalStaked));
-  const holHref = holInfo?.profileUrl || "https://hol.org/registry";
-  const ownerHref = hashscanAddressUrl(agent.owner);
-  const registryHref = CONTRACT_ADDRESSES.agentRegistry
-    ? hashscanAddressUrl(CONTRACT_ADDRESSES.agentRegistry)
-    : null;
-
-  const roundProofByRound = useMemo(() => {
-    const map = new Map<number, string>();
-    const prioritized = [...timelineEvents]
-      .filter((event) => event.roundId != null)
-      .sort((a, b) => {
-        const aWeight = a.eventType === "PREDICTION_REVEALED" ? 0 : 1;
-        const bWeight = b.eventType === "PREDICTION_REVEALED" ? 0 : 1;
-        if (aWeight !== bWeight) return aWeight - bWeight;
-        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-      });
-
-    for (const event of prioritized) {
-      const roundId = event.roundId;
-      if (roundId == null || map.has(roundId)) continue;
-      const href = timelineProofHref(event);
-      if (href) map.set(roundId, href);
-    }
-
-    return map;
-  }, [timelineEvents]);
-
-  const signalRows = useMemo((): AgentSignalRow[] => {
-    const rows: AgentSignalRow[] = [];
-    for (const msg of feed) {
-      const parsedAgentId = String(msg.parsed.agentId ?? "").toLowerCase();
-      const isSameAgent =
-        parsedAgentId === String(agent.id) || parsedAgentId === agent.name.toLowerCase();
-      if (!isSameAgent) continue;
-
-      const parsedRoundId =
-        typeof msg.parsed.roundId === "number"
-          ? msg.parsed.roundId
-          : typeof msg.parsed.roundId === "string"
-            ? Number.parseInt(msg.parsed.roundId, 10)
-            : NaN;
-      const roundId = Number.isFinite(parsedRoundId) ? parsedRoundId : undefined;
-
-      const confidenceValue =
-        typeof msg.parsed.confidence === "number"
-          ? msg.parsed.confidence
-          : typeof msg.parsed.confidence === "string"
-            ? Number.parseFloat(msg.parsed.confidence)
-            : null;
-
-      const fallbackProof =
-        msg.raw.topicId && msg.raw.sequenceNumber != null
-          ? mirrorMessageUrl(msg.raw.topicId, msg.raw.sequenceNumber)
-          : null;
-
-      rows.push({
-        key: `${msg.raw.topicId}-${msg.raw.sequenceNumber}-${roundId ?? "x"}`,
-        roundId,
-        direction: directionFromUnknown(msg.parsed.direction),
-        confidence: Number.isFinite(confidenceValue as number) ? confidenceValue : null,
-        timestampIso: asIsoFromConsensus(msg.raw.consensusTimestamp),
-        proofHref: (roundId != null ? roundProofByRound.get(roundId) : null) ?? fallbackProof,
-      });
-    }
-
-    rows.sort((a, b) => new Date(b.timestampIso).getTime() - new Date(a.timestampIso).getTime());
-    return rows.slice(0, 40);
-  }, [agent.id, agent.name, feed, roundProofByRound]);
-
-  const sortedTimeline = useMemo(() => {
-    const events = [...timelineEvents];
-    events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    return events.slice(0, 40);
-  }, [timelineEvents]);
+  const holHref =
+    typeof holInfo?.profileUrl === "string" && holInfo.profileUrl.length > 0
+      ? holInfo.profileUrl
+      : null;
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 pb-16 md:space-y-10">
@@ -271,15 +334,21 @@ export default function AgentProfile() {
         <p className="mt-4 text-sm text-muted-foreground">{agent.description}</p>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <a
-            href={holHref}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
-          >
-            HOL Registry
-            <ExternalLink className="h-3 w-3" />
-          </a>
+          {holHref ? (
+            <a
+              href={holHref}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
+            >
+              HOL Registry
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+              HOL Pending
+            </span>
+          )}
           {registryHref ? (
             <a
               href={registryHref}
@@ -287,22 +356,24 @@ export default function AgentProfile() {
               rel="noreferrer"
               className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
             >
-              On-chain Registry
+              AgentRegistry Contract
               <ExternalLink className="h-3 w-3" />
             </a>
           ) : null}
-          <a
-            href={ownerHref}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
-          >
-            Owner
-            <ExternalLink className="h-3 w-3" />
-          </a>
+          {ownerHref ? (
+            <a
+              href={ownerHref}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
+            >
+              Owner
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : null}
           {holInfo?.inboundTopicId ? (
             <a
-              href={mirrorTopicUrl(holInfo.inboundTopicId)}
+              href={hashscanTopicUrl(holInfo.inboundTopicId)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
@@ -313,7 +384,7 @@ export default function AgentProfile() {
           ) : null}
           {holInfo?.profileTopicId ? (
             <a
-              href={mirrorTopicUrl(holInfo.profileTopicId)}
+              href={hashscanTopicUrl(holInfo.profileTopicId)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"

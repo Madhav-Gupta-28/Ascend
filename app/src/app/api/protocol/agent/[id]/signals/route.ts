@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ethers } from "ethers";
 import { AGENT_REGISTRY_ABI, CONTRACT_ADDRESSES, PREDICTION_MARKET_ABI, TOPIC_IDS } from "@/lib/contracts";
+import { hashscanTransactionUrl, normalizeTransactionId } from "@/lib/explorer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,9 +36,43 @@ function getMirrorBase(): string {
     return base.endsWith("/api/v1") ? base.slice(0, -7) : base;
 }
 
-function hashscanTxUrl(txHash: string): string {
-    const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || process.env.HEDERA_NETWORK || "testnet";
-    return `https://hashscan.io/${network}/transaction/${txHash}`;
+async function resolveHashscanTxUrl(txHash: string, mirrorBase: string): Promise<string> {
+    const fallback = hashscanTransactionUrl(txHash);
+    try {
+        const contractRes = await fetch(
+            `${mirrorBase}/api/v1/contracts/results/${encodeURIComponent(txHash)}`,
+            {
+                cache: "no-store",
+                headers: { Accept: "application/json" },
+                signal: AbortSignal.timeout(8_000),
+            },
+        );
+        if (!contractRes.ok) return fallback;
+        const contractPayload = await contractRes.json();
+        const consensusTimestamp = String(contractPayload?.timestamp || "").trim();
+        if (!consensusTimestamp) return fallback;
+
+        const txRes = await fetch(
+            `${mirrorBase}/api/v1/transactions?timestamp=${encodeURIComponent(consensusTimestamp)}`,
+            {
+                cache: "no-store",
+                headers: { Accept: "application/json" },
+                signal: AbortSignal.timeout(8_000),
+            },
+        );
+        if (!txRes.ok) return fallback;
+        const txPayload = await txRes.json();
+        const txs = Array.isArray(txPayload?.transactions) ? txPayload.transactions : [];
+        const candidate =
+            txs.find((tx: any) => tx?.name === "ETHEREUMTRANSACTION" && typeof tx?.transaction_id === "string") ||
+            txs.find((tx: any) => typeof tx?.transaction_id === "string") ||
+            null;
+        const txId = typeof candidate?.transaction_id === "string" ? candidate.transaction_id.trim() : "";
+        if (!txId) return fallback;
+        return hashscanTransactionUrl(normalizeTransactionId(txId));
+    } catch {
+        return fallback;
+    }
 }
 
 function toIsoFromConsensus(consensusTs: string): string {
@@ -125,10 +160,10 @@ export async function GET(
 
     const reasonByRound = new Map<number, { reasoning: string; summary: string; confidence: number | null; timestamp: string }>();
     const predictionsTopicId = TOPIC_IDS.predictions || TOPIC_IDS.legacyRounds;
+    const mirrorBase = getMirrorBase();
 
     if (predictionsTopicId) {
         try {
-            const mirrorBase = getMirrorBase();
             const url = `${mirrorBase}/api/v1/topics/${encodeURIComponent(predictionsTopicId)}/messages?limit=180&order=desc`;
             const res = await fetch(url, {
                 cache: "no-store",
@@ -192,6 +227,7 @@ export async function GET(
             fromBlock,
             "latest",
         );
+        const txUrlByHash = new Map<string, string>();
 
         for (const log of logs) {
             const args = (log as any).args;
@@ -203,6 +239,17 @@ export async function GET(
             const reasoning = roundId != null ? reasonByRound.get(roundId)?.reasoning ?? "" : "";
             const summary = roundId != null ? reasonByRound.get(roundId)?.summary ?? "No reasoning found on HCS for this reveal" : "No reasoning found on HCS for this reveal";
 
+            const txHash = String(log.transactionHash || "");
+            let hashscanUrl: string | undefined;
+            if (txHash) {
+                if (txUrlByHash.has(txHash)) {
+                    hashscanUrl = txUrlByHash.get(txHash);
+                } else {
+                    hashscanUrl = await resolveHashscanTxUrl(txHash, mirrorBase);
+                    txUrlByHash.set(txHash, hashscanUrl);
+                }
+            }
+
             signals.push({
                 roundId,
                 direction,
@@ -210,8 +257,8 @@ export async function GET(
                 timestamp,
                 reasoning,
                 summary,
-                txHash: log.transactionHash,
-                hashscanUrl: hashscanTxUrl(log.transactionHash),
+                txHash: txHash || undefined,
+                hashscanUrl,
             });
         }
     } catch (error: any) {

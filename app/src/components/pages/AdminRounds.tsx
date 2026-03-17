@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { useResolvedTransactionLinks } from "@/hooks/useResolvedTransactionLinks";
 
 type AdminAgentStatus = {
     id: number;
@@ -50,11 +51,6 @@ type CreatedRoundInfo = {
     txHash: string;
 };
 
-function hashscanTxUrl(txHash: string): string {
-    const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
-    return `https://hashscan.io/${network}/transaction/${txHash}`;
-}
-
 export default function AdminRounds() {
     const queryClient = useQueryClient();
     const [commitSecs, setCommitSecs] = useState(45);
@@ -64,6 +60,7 @@ export default function AdminRounds() {
     const [adminKey, setAdminKey] = useState("");
     const [isStarting, setIsStarting] = useState(false);
     const [createdRound, setCreatedRound] = useState<CreatedRoundInfo | null>(null);
+    const { getTransactionUrl } = useResolvedTransactionLinks([createdRound?.txHash ?? null]);
 
     const { data, isLoading, refetch } = useQuery({
         queryKey: ["admin-round-eligible"],
@@ -259,7 +256,7 @@ export default function AdminRounds() {
                                 </Link>
                                 {createdRound.txHash ? (
                                     <a
-                                        href={hashscanTxUrl(createdRound.txHash)}
+                                        href={getTransactionUrl(createdRound.txHash) || "#"}
                                         target="_blank"
                                         rel="noreferrer"
                                         className="text-primary underline-offset-2 hover:underline"
