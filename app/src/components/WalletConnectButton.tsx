@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useHederaWallet, useHederaWalletLabel } from "@/components/HederaWalletProvider";
+import { toast } from "sonner";
 
 export default function WalletConnectButton() {
   const {
@@ -34,6 +35,11 @@ export default function WalletConnectButton() {
       } else {
         await connect();
       }
+    } catch (err: any) {
+      const message = err?.message || "Wallet request failed";
+      toast.error(message);
+      // Keep details in console for debugging without crashing UI.
+      console.warn("Wallet connect/disconnect error:", err);
     } finally {
       setIsWorking(false);
     }

@@ -14,6 +14,8 @@ import * as path from "node:path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+const HOL_GUARDED_REGISTRY_BASE_URL =
+    process.env.HOL_GUARDED_REGISTRY_BASE_URL ?? "https://moonscape.tech";
 
 interface RegisterHOLRequest {
     agentName: string;
@@ -27,8 +29,69 @@ interface HOLRegistrationState {
     inboundTopicId: string;
     outboundTopicId: string;
     profileTopicId: string;
+    uaid?: string;
+    guardedRegistryTxId?: string;
     registeredAt: string;
     onChainAgentId?: number;
+}
+
+function normalizeTxId(input: unknown): string | null {
+    if (typeof input !== "string") return null;
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+    return trimmed;
+}
+
+function pickGuardedRegistryTxId(result: any): string | null {
+    const candidates = [
+        result?.registrationTransactionId,
+        result?.registrationTxId,
+        result?.guardedRegistryTxId,
+        result?.txId,
+        result?.metadata?.registrationTransactionId,
+        result?.metadata?.registrationTxId,
+        result?.metadata?.guardedRegistryTxId,
+        result?.metadata?.txId,
+    ];
+
+    for (const candidate of candidates) {
+        const parsed = normalizeTxId(candidate);
+        if (parsed) return parsed;
+    }
+
+    return null;
+}
+
+function buildHolProfileUrl(uaid: string | null | undefined): string {
+    if (!uaid) return "https://hol.org/registry";
+    return `https://hol.org/registry/agent/${encodeURIComponent(uaid)}`;
+}
+
+function buildHashscanTxUrl(txIdOrHash: string, network: string): string {
+    return `https://hashscan.io/${network}/transaction/${encodeURIComponent(txIdOrHash)}`;
+}
+
+async function fetchGuardedRegistryTransactionId(
+    accountId: string,
+    network: string,
+): Promise<string | null> {
+    try {
+        const url = `${HOL_GUARDED_REGISTRY_BASE_URL}/api/registrations?accountId=${encodeURIComponent(accountId)}&network=${encodeURIComponent(network)}`;
+        const res = await fetch(url, {
+            headers: { Accept: "application/json" },
+            signal: AbortSignal.timeout(10_000),
+            cache: "no-store",
+        });
+        if (!res.ok) return null;
+        const payload = await res.json();
+        const regs = Array.isArray(payload?.registrations) ? payload.registrations : [];
+        const completed = regs.find((reg: any) => reg?.status === "completed");
+        const reg = completed ?? regs[0];
+        if (!reg) return null;
+        return normalizeTxId(reg.transactionId);
+    } catch {
+        return null;
+    }
 }
 
 function getStateDir(): string {
@@ -91,6 +154,16 @@ export async function POST(req: NextRequest) {
     // Idempotency: return cached state if already registered
     const existing = loadState(agentName);
     if (existing) {
+        const guardedRegistryTxId =
+            existing.guardedRegistryTxId ??
+            (await fetchGuardedRegistryTransactionId(existing.accountId, network));
+        if (guardedRegistryTxId && existing.guardedRegistryTxId !== guardedRegistryTxId) {
+            saveState(agentName, { ...existing, guardedRegistryTxId });
+        }
+        const profileUrl = buildHolProfileUrl(existing.uaid);
+        const guardedRegistryTxHashscanUrl = guardedRegistryTxId
+            ? buildHashscanTxUrl(guardedRegistryTxId, network)
+            : null;
         return NextResponse.json({
             success: true,
             cached: true,
@@ -98,6 +171,10 @@ export async function POST(req: NextRequest) {
             inboundTopicId: existing.inboundTopicId,
             outboundTopicId: existing.outboundTopicId,
             profileTopicId: existing.profileTopicId,
+            uaid: existing.uaid ?? null,
+            profileUrl,
+            guardedRegistryTxId,
+            guardedRegistryTxHashscanUrl,
         });
     }
 
@@ -152,12 +229,22 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        const resultAny = result as any;
+        const uaid =
+            (typeof result.metadata.uaid === "string" ? result.metadata.uaid : null) ??
+            (typeof resultAny.uaid === "string" ? resultAny.uaid : null);
+        const guardedRegistryTxId =
+            pickGuardedRegistryTxId(resultAny) ??
+            (await fetchGuardedRegistryTransactionId(result.metadata.accountId, network));
+
         const state: HOLRegistrationState = {
             accountId: result.metadata.accountId,
             privateKey: result.metadata.privateKey,
             inboundTopicId: result.metadata.inboundTopicId,
             outboundTopicId: result.metadata.outboundTopicId,
             profileTopicId: result.metadata.profileTopicId,
+            uaid: uaid ?? undefined,
+            guardedRegistryTxId: guardedRegistryTxId ?? undefined,
             registeredAt: new Date().toISOString(),
             onChainAgentId: onChainAgentId > 0 ? onChainAgentId : undefined,
         };
@@ -169,6 +256,11 @@ export async function POST(req: NextRequest) {
 
         console.log(`[HOL-API] ${agentName} registered: account=${state.accountId} inbound=${state.inboundTopicId}`);
 
+        const profileUrl = buildHolProfileUrl(uaid);
+        const guardedRegistryTxHashscanUrl = guardedRegistryTxId
+            ? buildHashscanTxUrl(guardedRegistryTxId, network)
+            : null;
+
         return NextResponse.json({
             success: true,
             cached: false,
@@ -176,6 +268,10 @@ export async function POST(req: NextRequest) {
             inboundTopicId: state.inboundTopicId,
             outboundTopicId: state.outboundTopicId,
             profileTopicId: state.profileTopicId,
+            uaid,
+            profileUrl,
+            guardedRegistryTxId,
+            guardedRegistryTxHashscanUrl,
         });
     } catch (err: any) {
         console.error(`[HOL-API] Error registering ${agentName}: ${err.message}`);

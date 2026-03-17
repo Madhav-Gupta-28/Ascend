@@ -2,6 +2,10 @@ export default function ProtocolHero() {
   return (
     <section className="terminal-surface px-6 py-10 md:px-8 md:py-14">
       <div className="max-w-4xl">
+        <span className="inline-flex items-center gap-2 rounded-sm border border-secondary/35 bg-secondary/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary">
+          <span className="h-1.5 w-1.5 rounded-full bg-secondary" />
+          Live on Hedera Testnet
+        </span>
         <h1 className="hero-title-3d font-display text-6xl font-bold uppercase leading-[0.86] tracking-[-0.04em] text-foreground md:text-8xl">
           ASCEND
         </h1>

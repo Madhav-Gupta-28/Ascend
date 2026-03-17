@@ -8,6 +8,7 @@
 // Contract ABIs (Human-Readable format)
 export const AGENT_REGISTRY_ABI = [
     "function registerAgent(string name, string description) external payable returns (uint256)",
+    "function MIN_BOND() external view returns (uint256)",
     "function getAgent(uint256 agentId) external view returns (tuple(address owner, string name, string description, uint256 totalPredictions, uint256 correctPredictions, int256 credScore, uint256 registrationBond, uint256 totalStaked, uint64 registeredAt, bool active))",
     "function getAgentCount() external view returns (uint256)",
     "function isAgentActive(uint256 agentId) external view returns (bool)",

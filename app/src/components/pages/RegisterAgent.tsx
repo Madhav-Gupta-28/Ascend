@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, CheckCircle2, CircleHelp, Loader2, X } from "lucide-react";
+import { ArrowRight, CheckCircle2, CircleHelp, ExternalLink, Loader2, X } from "lucide-react";
 import { CONTRACT_ADDRESSES, AGENT_REGISTRY_ABI } from "@/lib/contracts";
 import { useHederaWallet } from "@/hooks/use-hedera-wallet";
 import { toast } from "sonner";
-import { parseHbar, getProvider } from "@/lib/hedera";
+import { formatHbar, parseHbar, getProvider } from "@/lib/hedera";
 import { ethers } from "ethers";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -37,6 +37,59 @@ const PREDEFINED_STRATEGIES = [
   },
 ];
 
+function isExpectedWalletError(message: string): boolean {
+  return /proposal expired|request expired|rejected in wallet|user rejected|cancelled by user/i.test(message);
+}
+
+function hashscanTxUrl(txIdOrHash: string): string {
+  const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
+  return `https://hashscan.io/${network}/transaction/${encodeURIComponent(txIdOrHash)}`;
+}
+
+function extractTransactionId(result: unknown): string | null {
+  const queue: unknown[] = [result];
+  const seen = new Set<unknown>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object") continue;
+    if (seen.has(current)) continue;
+    seen.add(current);
+
+    const record = current as Record<string, unknown>;
+    const directCandidates = [
+      record.transactionId,
+      record.transaction_id,
+      record.txId,
+      record.tx_id,
+      record.hash,
+      record.transactionHash,
+      record.transaction_hash,
+    ];
+
+    for (const candidate of directCandidates) {
+      if (typeof candidate === "string" && candidate.trim().length > 0) {
+        return candidate.trim();
+      }
+    }
+
+    for (const value of Object.values(record)) {
+      if (value && typeof value === "object") queue.push(value);
+    }
+  }
+
+  return null;
+}
+
+type DeploymentProof = {
+  contractTxId: string | null;
+  contractTxUrl: string | null;
+  holTxId: string | null;
+  holTxUrl: string | null;
+  holProfileUrl: string | null;
+  inboundTopicId: string | null;
+};
+
 export default function RegisterAgent() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -44,6 +97,8 @@ export default function RegisterAgent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deployStep, setDeployStep] = useState<"idle" | "evm" | "hcs" | "done">("idle");
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [bondTinybars, setBondTinybars] = useState<bigint>(parseHbar("1"));
+  const [deploymentProof, setDeploymentProof] = useState<DeploymentProof | null>(null);
 
   const { isConnected, executeContractFunction } = useHederaWallet();
   const queryClient = useQueryClient();
@@ -53,6 +108,35 @@ export default function RegisterAgent() {
     const strategy = PREDEFINED_STRATEGIES.find((item) => item.id === selectedStrategy);
     if (strategy) setDescription(strategy.description);
   }, [selectedStrategy]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadMinimumBond() {
+      try {
+        const provider = getProvider();
+        const registry = new ethers.Contract(
+          CONTRACT_ADDRESSES.agentRegistry,
+          AGENT_REGISTRY_ABI,
+          provider,
+        );
+        const minBond = await registry.MIN_BOND();
+        if (mounted && typeof minBond === "bigint" && minBond > 0n) {
+          setBondTinybars(minBond);
+        }
+      } catch {
+        // Keep default fallback of 1 HBAR if read fails.
+      }
+    }
+    void loadMinimumBond();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const bondHbarDisplay = Number(formatHbar(bondTinybars)).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 4,
+  });
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,19 +152,30 @@ export default function RegisterAgent() {
     }
 
     try {
+      setDeploymentProof(null);
       setIsSubmitting(true);
       setDeployStep("evm");
 
-      const bondAmountInTinybars = parseHbar("10").toString();
+      const bondAmountInTinybars = bondTinybars.toString();
       const args = [name, description];
 
-      await executeContractFunction(
+      const registerResult = await executeContractFunction(
         CONTRACT_ADDRESSES.agentRegistry,
         AGENT_REGISTRY_ABI,
         "registerAgent",
         args,
         bondAmountInTinybars,
       );
+      const contractTxId = extractTransactionId(registerResult);
+      const contractTxUrl = contractTxId ? hashscanTxUrl(contractTxId) : null;
+      setDeploymentProof({
+        contractTxId,
+        contractTxUrl,
+        holTxId: null,
+        holTxUrl: null,
+        holProfileUrl: null,
+        inboundTopicId: null,
+      });
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["agents"] }),
@@ -119,6 +214,28 @@ export default function RegisterAgent() {
             id: "hol-register",
             duration: 6000,
           });
+          setDeploymentProof((prev) => ({
+            contractTxId: prev?.contractTxId ?? null,
+            contractTxUrl: prev?.contractTxUrl ?? null,
+            holTxId:
+              (typeof holData.guardedRegistryTxId === "string" ? holData.guardedRegistryTxId : null) ??
+              prev?.holTxId ??
+              null,
+            holTxUrl:
+              (typeof holData.guardedRegistryTxHashscanUrl === "string"
+                ? holData.guardedRegistryTxHashscanUrl
+                : null) ??
+              prev?.holTxUrl ??
+              null,
+            holProfileUrl:
+              (typeof holData.profileUrl === "string" ? holData.profileUrl : null) ??
+              prev?.holProfileUrl ??
+              null,
+            inboundTopicId:
+              (typeof holData.inboundTopicId === "string" ? holData.inboundTopicId : null) ??
+              prev?.inboundTopicId ??
+              null,
+          }));
         } else {
           toast.warning(`HOL registration deferred: ${holData.error || "unknown"}`, {
             id: "hol-register",
@@ -137,8 +254,11 @@ export default function RegisterAgent() {
         setSelectedStrategy("");
       }, 2200);
     } catch (err: any) {
-      console.error("Registration failed:", err);
-      toast.error(`Transaction failed: ${err.message || "Unknown error"}`, { id: "register-tx" });
+      const message = err?.message || "Unknown error";
+      if (!isExpectedWalletError(message)) {
+        console.warn("Registration failed:", err);
+      }
+      toast.error(`Transaction failed: ${message}`, { id: "register-tx" });
       setIsSubmitting(false);
       setDeployStep("idle");
     }
@@ -222,7 +342,7 @@ export default function RegisterAgent() {
 
             <div className="rounded-sm border border-border bg-card px-4 py-3.5">
               <p className="terminal-heading">Registration Bond</p>
-              <p className="mt-2 font-mono text-xl text-foreground">10 HBAR</p>
+              <p className="mt-2 font-mono text-xl text-foreground">{bondHbarDisplay} HBAR</p>
               <p className="mt-1 text-xs text-muted-foreground">Refundable on deregistration.</p>
             </div>
 
@@ -245,6 +365,70 @@ export default function RegisterAgent() {
                 </>
               )}
             </button>
+
+            {deploymentProof ? (
+              <div className="rounded-sm border border-border bg-card px-4 py-3.5">
+                <p className="terminal-heading">Deployment Proof</p>
+                <div className="mt-2 space-y-2">
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                      Contract TX
+                    </p>
+                    {deploymentProof.contractTxUrl ? (
+                      <a
+                        href={deploymentProof.contractTxUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] text-secondary hover:text-secondary/85"
+                      >
+                        {deploymentProof.contractTxId}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : (
+                      <p className="mt-1 font-mono text-[11px] text-muted-foreground">Pending wallet tx id</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                      HOL Registration TX
+                    </p>
+                    {deploymentProof.holTxUrl ? (
+                      <a
+                        href={deploymentProof.holTxUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] text-secondary hover:text-secondary/85"
+                      >
+                        {deploymentProof.holTxId}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : (
+                      <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+                        Pending or not returned by HOL broker
+                      </p>
+                    )}
+                  </div>
+
+                  {deploymentProof.holProfileUrl ? (
+                    <div>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                        HOL Profile
+                      </p>
+                      <a
+                        href={deploymentProof.holProfileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] text-secondary hover:text-secondary/85"
+                      >
+                        Open profile
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </form>
         </section>
 
@@ -328,7 +512,7 @@ export default function RegisterAgent() {
 
               <div className="mt-4 space-y-3 text-sm text-muted-foreground">
                 <p>
-                  Registration creates your agent in the on-chain `AgentRegistry` with a refundable 10 HBAR bond.
+                  Registration creates your agent in the on-chain `AgentRegistry` with a refundable bond.
                 </p>
                 <p>
                   After on-chain success, Ascend attempts HOL registration so your agent becomes discoverable and reachable over HCS-10.

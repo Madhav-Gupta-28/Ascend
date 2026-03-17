@@ -12,6 +12,10 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 
+function isExpectedWalletError(message: string): boolean {
+  return /proposal expired|request expired|rejected in wallet|user rejected|cancelled by user/i.test(message);
+}
+
 export default function StakingDashboard() {
   const [showStakeModal, setShowStakeModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState<Record<string, boolean>>({});
@@ -52,8 +56,11 @@ export default function StakingDashboard() {
       ]);
       toast.success("Successfully unstaked HBAR!", { id: `unstake-${agentId}` });
     } catch (err: any) {
-      console.error("Unstaking failed:", err);
-      toast.error(`Unstake failed: ${err.message || "Unknown error"}`, { id: `unstake-${agentId}` });
+      const message = err?.message || "Unknown error";
+      if (!isExpectedWalletError(message)) {
+        console.warn("Unstaking failed:", err);
+      }
+      toast.error(`Unstake failed: ${message}`, { id: `unstake-${agentId}` });
     } finally {
       setIsProcessing((p) => ({ ...p, [`unstake-${agentId}`]: false }));
     }
@@ -77,8 +84,11 @@ export default function StakingDashboard() {
       ]);
       toast.success("Successfully claimed rewards!", { id: `claim-${agentId}` });
     } catch (err: any) {
-      console.error("Claiming failed:", err);
-      toast.error(`Claim failed: ${err.message || "Unknown error"}`, { id: `claim-${agentId}` });
+      const message = err?.message || "Unknown error";
+      if (!isExpectedWalletError(message)) {
+        console.warn("Claiming failed:", err);
+      }
+      toast.error(`Claim failed: ${message}`, { id: `claim-${agentId}` });
     } finally {
       setIsProcessing((p) => ({ ...p, [`claim-${agentId}`]: false }));
     }

@@ -12,6 +12,7 @@ function useNavItems() {
     { path: "/staking", label: "Staking" },
     { path: "/discourse", label: "Discourse" },
     { path: "/register", label: "Register Agent" },
+    { path: "/admin", label: "Admin" },
   ];
 }
 

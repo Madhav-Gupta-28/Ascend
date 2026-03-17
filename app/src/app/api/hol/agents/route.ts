@@ -15,7 +15,7 @@ const HOL_REGISTRY_BASE = "https://hol.org/registry/api/v1";
 const HOL_GUARDED_REGISTRY_BASE =
     process.env.HOL_GUARDED_REGISTRY_BASE_URL ?? "https://moonscape.tech";
 const HEDERA_NETWORK = process.env.HEDERA_NETWORK ?? "testnet";
-const CACHE_TTL_MS = 60_000; // 60 seconds
+const CACHE_TTL_MS = 10_000; // 10 seconds
 
 let cachedResponse: { data: unknown; fetchedAt: number } | null = null;
 
@@ -25,6 +25,50 @@ type HolState = {
     inboundTopicId: string | null;
     profileTopicId: string | null;
 };
+
+type HolAgentResponse = {
+    uaid: string | null;
+    name: string;
+    description: string;
+    capabilities: unknown[];
+    accountId: string | null;
+    inboundTopicId: string | null;
+    profileTopicId: string | null;
+    trustScore: number | null;
+    verified: boolean;
+    profileUrl: string;
+};
+
+function getHolProfileUrl(uaid?: string | null): string {
+    if (uaid && uaid.trim().length > 0) {
+        return `https://hol.org/registry/agent/${encodeURIComponent(uaid.trim())}`;
+    }
+    return "https://hol.org/registry";
+}
+
+function normalizeAgentName(rawName: string): string {
+    const trimmed = rawName.trim();
+    if (!trimmed) return "Unknown";
+    return trimmed;
+}
+
+function isAscendAgent(candidate: any): boolean {
+    const name = String(candidate?.name ?? candidate?.display_name ?? "").toLowerCase();
+    const description = String(candidate?.description ?? candidate?.bio ?? "").toLowerCase();
+    const creator = String(candidate?.profile?.aiAgent?.creator ?? candidate?.creator ?? "").toLowerCase();
+    const platform = String(
+        candidate?.profile?.properties?.platform ??
+            candidate?.metadata?.platform ??
+            candidate?.metadata?.onchainMetadata?.platform ??
+            "",
+    ).toLowerCase();
+
+    if (name.startsWith("ascend:")) return true;
+    if (creator.includes("ascend intelligence market")) return true;
+    if (platform.includes("ascend intelligence market")) return true;
+    if (description.includes("ascend intelligence market")) return true;
+    return false;
+}
 
 function loadLocalHolStates(): HolState[] {
     const candidateDirs = [
@@ -93,6 +137,7 @@ async function fetchGuardedRegistryAgents(states: HolState[]) {
                     profileTopicId: state.profileTopicId,
                     trustScore: null,
                     verified: reg.status === "completed",
+                    profileUrl: getHolProfileUrl(profile.uaid ?? reg.uaid ?? null),
                 };
             } catch {
                 return null;
@@ -129,6 +174,8 @@ export async function GET() {
         // Extract agent entries - the search API returns different shapes
         const agents = Array.isArray(data)
             ? data
+            : Array.isArray(data?.hits)
+              ? data.hits
             : Array.isArray(data?.results)
               ? data.results
               : Array.isArray(data?.agents)
@@ -136,22 +183,22 @@ export async function GET() {
                 : [];
 
         const ascendAgents = agents
-            .filter((a: any) => {
-                const name = (a.name ?? a.display_name ?? "").toLowerCase();
-                const desc = (a.description ?? "").toLowerCase();
-                return name.includes("ascend") || desc.includes("ascend intelligence");
-            })
-            .map((a: any) => ({
-                uaid: a.uaid ?? a.id ?? null,
-                name: a.name ?? a.display_name ?? "Unknown",
-                description: a.description ?? "",
-                capabilities: a.capabilities ?? [],
-                accountId: a.account_id ?? a.accountId ?? null,
-                inboundTopicId: a.inbound_topic_id ?? a.inboundTopicId ?? null,
-                profileTopicId: a.profile_topic_id ?? a.profileTopicId ?? null,
-                trustScore: a.trust_score ?? a.trustScore ?? null,
-                verified: a.verified ?? false,
-            }));
+            .filter((a: any) => isAscendAgent(a))
+            .map((a: any): HolAgentResponse => {
+                const uaid = a.uaid ?? a.profile?.uaid ?? a.metadata?.uaid ?? null;
+                return {
+                    uaid,
+                    name: normalizeAgentName(a.name ?? a.display_name ?? a.profile?.display_name ?? "Unknown"),
+                    description: a.description ?? a.profile?.bio ?? "",
+                    capabilities: a.capabilities ?? a.profile?.aiAgent?.capabilities ?? [],
+                    accountId: a.account_id ?? a.accountId ?? null,
+                    inboundTopicId: a.inbound_topic_id ?? a.inboundTopicId ?? null,
+                    profileTopicId: a.profile_topic_id ?? a.profileTopicId ?? null,
+                    trustScore: a.trust_score ?? a.trustScore ?? null,
+                    verified: a.verified ?? false,
+                    profileUrl: getHolProfileUrl(uaid),
+                };
+            });
 
         agentsOut = ascendAgents;
     } catch (err: any) {
@@ -178,6 +225,7 @@ export async function GET() {
                     profileTopicId: s.profileTopicId,
                     trustScore: null,
                     verified: false,
+                    profileUrl: "https://hol.org/registry",
                 }));
                 source = "guarded-fallback";
             }

@@ -8,7 +8,7 @@ interface SystemMetricsProps {
 interface MetricItem {
   label: string;
   value: string;
-  delta: string;
+  hint: string;
 }
 
 function MetricCard({ item }: { item: MetricItem }) {
@@ -18,7 +18,7 @@ function MetricCard({ item }: { item: MetricItem }) {
       <p className="mt-3 font-mono text-[34px] leading-none tracking-tight text-foreground">
         {item.value}
       </p>
-      <p className="mt-2 font-mono text-[11px] text-secondary">{item.delta}</p>
+      <p className="mt-2 font-mono text-[11px] text-muted-foreground">{item.hint}</p>
     </div>
   );
 }
@@ -33,22 +33,22 @@ export default function SystemMetrics({
     {
       label: "Agents Active",
       value: agentsActive.toLocaleString(),
-      delta: `+${Math.max(1, Math.round(agentsActive * 0.02))} 24h`,
+      hint: "On-chain registry",
     },
     {
       label: "Predictions Logged",
       value: predictionsLogged.toLocaleString(),
-      delta: `+${Math.max(5, Math.round(predictionsLogged * 0.01))} 24h`,
+      hint: "From CredScore ledger",
     },
     {
       label: "Rounds Completed",
       value: roundsCompleted.toLocaleString(),
-      delta: "+3 24h",
+      hint: "PredictionMarket rounds",
     },
     {
       label: "Total HBAR Staked",
       value: Math.round(totalHbarStaked).toLocaleString(),
-      delta: `+${Math.max(10, Math.round(totalHbarStaked * 0.006)).toLocaleString()} 24h`,
+      hint: "StakingVault TVL",
     },
   ];
 

@@ -70,6 +70,40 @@ function shortAccountId(accountId: string | null): string {
     : `${accountId.slice(0, 6)}…${accountId.slice(-3)}`;
 }
 
+function normalizeWalletError(err: unknown): Error {
+  const message = err instanceof Error ? err.message : String(err ?? "Unknown wallet error");
+  if (/proposal expired/i.test(message)) {
+    return new Error("Wallet request expired. Reopen HashPack and try again.");
+  }
+  if (/user rejected|rejected by user|cancelled by user/i.test(message)) {
+    return new Error("Request rejected in wallet.");
+  }
+  return new Error(message);
+}
+
+function getWalletErrorText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value instanceof Error) return value.message;
+  if (value && typeof value === "object") {
+    try {
+      const message = (value as any).message;
+      if (typeof message === "string") return message;
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value ?? "");
+}
+
+function isBenignWalletNoise(value: unknown): boolean {
+  const text = getWalletErrorText(value).trim();
+  if (/proposal expired/i.test(text)) return true;
+  // Some WalletConnect/HashConnect paths emit empty object errors.
+  if (text === "{}" || text === "[object Object]") return true;
+  return false;
+}
+
 export function HederaWalletProvider({ children }: { children: ReactNode }) {
   const hashConnectRef = useRef<HashConnectLike | null>(null);
 
@@ -180,21 +214,76 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const originalConsoleError = console.error.bind(console);
+    const originalReportError = (window as any).reportError;
+    const patchedConsoleError: typeof console.error = (...args: unknown[]) => {
+      if (args.some((arg) => isBenignWalletNoise(arg))) {
+        console.warn(...args);
+        return;
+      }
+      originalConsoleError(...args);
+    };
+
+    console.error = patchedConsoleError;
+    if (typeof originalReportError === "function") {
+      (window as any).reportError = (error: unknown) => {
+        if (isBenignWalletNoise(error)) return;
+        originalReportError(error);
+      };
+    }
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      if (isBenignWalletNoise(event.reason)) {
+        event.preventDefault();
+      }
+    };
+
+    const handleWindowError = (event: ErrorEvent) => {
+      const candidate = event.error ?? event.message;
+      if (isBenignWalletNoise(candidate)) {
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener("unhandledrejection", handleUnhandledRejection, true);
+    window.addEventListener("error", handleWindowError, true);
+
+    return () => {
+      console.error = originalConsoleError;
+      if (typeof originalReportError === "function") {
+        (window as any).reportError = originalReportError;
+      }
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection, true);
+      window.removeEventListener("error", handleWindowError, true);
+    };
+  }, []);
+
   const connect = useCallback(async () => {
     const hashconnect = hashConnectRef.current;
     if (!hashconnect) {
       throw new Error("HashPack wallet is not initialized");
     }
-    await hashconnect.openPairingModal("dark");
-    setPairingString(hashconnect.pairingString || null);
+    try {
+      await hashconnect.openPairingModal("dark");
+      setPairingString(hashconnect.pairingString || null);
+    } catch (err) {
+      throw normalizeWalletError(err);
+    }
   }, []);
 
   const disconnect = useCallback(async () => {
     const hashconnect = hashConnectRef.current;
     if (!hashconnect) return;
-    await hashconnect.disconnect();
-    setAccountIds([]);
-    setSelectedAccountId(null);
+    try {
+      await hashconnect.disconnect();
+      setAccountIds([]);
+      setSelectedAccountId(null);
+    } catch (err) {
+      throw normalizeWalletError(err);
+    }
   }, []);
 
   const sendTransaction = useCallback(
@@ -209,7 +298,11 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
         throw new Error("No connected Hedera account");
       }
 
-      return hashconnect.sendTransaction(accountId as any, transaction as any);
+      try {
+        return await hashconnect.sendTransaction(accountId as any, transaction as any);
+      } catch (err) {
+        throw normalizeWalletError(err);
+      }
     },
     [selectedAccountId],
   );
@@ -226,8 +319,12 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
         throw new Error("No connected Hedera account");
       }
 
-      const signatures = await hashconnect.signMessages(accountId as any, message);
-      return JSON.stringify(signatures);
+      try {
+        const signatures = await hashconnect.signMessages(accountId as any, message);
+        return JSON.stringify(signatures);
+      } catch (err) {
+        throw normalizeWalletError(err);
+      }
     },
     [selectedAccountId],
   );

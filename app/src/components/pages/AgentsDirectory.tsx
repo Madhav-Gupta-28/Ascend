@@ -14,6 +14,7 @@ interface HOLAgentInfo {
   uaid?: string;
   name: string;
   accountId?: string;
+  profileUrl?: string;
 }
 
 function formatCompact(value: number): string {
@@ -25,11 +26,6 @@ function formatCompact(value: number): string {
 function hashscanAddressUrl(address: string): string {
   const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
   return `https://hashscan.io/${network}/address/${address}`;
-}
-
-function holRegistrySearchUrl(query?: string): string {
-  if (!query) return "https://hol.org/registry";
-  return `https://hol.org/registry?q=${encodeURIComponent(query)}`;
 }
 
 export default function AgentsDirectory() {
@@ -65,11 +61,17 @@ export default function AgentsDirectory() {
       : sortedAgents;
 
   const getHolInfo = (agentName: string): HOLAgentInfo | undefined => {
-    const lowerName = agentName.toLowerCase();
+    const normalize = (value: string) =>
+      value
+        .toLowerCase()
+        .replace(/^ascend:\s*/, "")
+        .trim();
+    const lowerName = normalize(agentName);
     return holAgents.find(
-      (agent) =>
-        agent.name?.toLowerCase().includes(lowerName) ||
-        lowerName.includes(agent.name?.toLowerCase() || "")
+      (agent) => {
+        const holName = normalize(agent.name || "");
+        return holName === lowerName || holName.includes(lowerName) || lowerName.includes(holName);
+      }
     );
   };
 
@@ -102,7 +104,7 @@ export default function AgentsDirectory() {
           <div className="inline-flex items-center gap-2 rounded-sm border border-secondary/35 bg-secondary/10 px-3 py-2">
             <ShieldCheck className="h-3.5 w-3.5 text-secondary" />
             <a
-              href={holRegistrySearchUrl("ascend")}
+              href="https://hol.org/registry"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
@@ -196,7 +198,7 @@ export default function AgentsDirectory() {
                 filteredAgents.map((agent, index) => {
                   const avatar = getAgentDirectoryEntry(agent.name)?.avatar ?? "🤖";
                   const holInfo = getHolInfo(agent.name);
-                  const holHref = holRegistrySearchUrl(holInfo?.accountId || holInfo?.name || agent.name);
+                  const holHref = holInfo?.profileUrl || "https://hol.org/registry";
                   const staked = Number(formatHbar(agent.totalStaked));
                   const model = agent.description ? agent.description.split(".")[0] : "Autonomous Strategy";
 

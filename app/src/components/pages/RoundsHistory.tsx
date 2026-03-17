@@ -54,6 +54,21 @@ export default function RoundsHistory() {
     return map;
   }, [timelineEvents]);
 
+  const winnersByRoundId = useMemo(() => {
+    const map = new Map<number, Set<string>>();
+    for (const event of timelineEvents) {
+      if (event.eventType !== "LEADERBOARD_CHANGED" || event.roundId == null || !event.agentName) {
+        continue;
+      }
+      const detail = String(event.detail ?? "");
+      const isWinner = detail.startsWith("+") || /\+\d/.test(event.message);
+      if (!isWinner) continue;
+      if (!map.has(event.roundId)) map.set(event.roundId, new Set<string>());
+      map.get(event.roundId)!.add(event.agentName);
+    }
+    return map;
+  }, [timelineEvents]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-40">
@@ -81,7 +96,10 @@ export default function RoundsHistory() {
             <thead>
               <tr className="border-b border-border">
                 <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Round</th>
+                <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Market</th>
                 <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Status</th>
+                <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Outcome</th>
+                <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Winning Agents</th>
                 <th className="px-4 py-3 text-right font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Open</th>
                 <th className="px-4 py-3 text-right font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Close</th>
                 <th className="px-4 py-3 text-right font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Participants</th>
@@ -92,13 +110,16 @@ export default function RoundsHistory() {
             <tbody>
               {rounds.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={10} className="px-4 py-10 text-center text-sm text-muted-foreground">
                     No rounds found on-chain yet.
                   </td>
                 </tr>
               ) : (
                 rounds.map((round) => {
                   const txHash = resolvedTxByRoundId.get(round.id);
+                  const winners = Array.from(winnersByRoundId.get(round.id) ?? []);
+                  const outcome =
+                    round.status === 2 ? (round.outcome === 0 ? "UP" : "DOWN") : "PENDING";
                   const actionLabel =
                     round.status === 0 || round.status === 1
                       ? "Track"
@@ -120,10 +141,25 @@ export default function RoundsHistory() {
                       className="cursor-pointer border-b border-border/80 transition-colors hover:bg-card/60 focus-visible:bg-card/70 last:border-b-0"
                     >
                       <td className="px-4 py-3 font-mono text-sm text-foreground">#{round.id}</td>
+                      <td className="px-4 py-3 font-mono text-sm text-foreground">HBAR / USD</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex rounded-sm border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] ${statusClasses(round)}`}>
                           {statusText(round)}
                         </span>
+                      </td>
+                      <td
+                        className={`px-4 py-3 font-mono text-sm ${
+                          outcome === "UP"
+                            ? "text-secondary"
+                            : outcome === "DOWN"
+                              ? "text-destructive"
+                              : "text-muted-foreground"
+                        }`}
+                      >
+                        {outcome}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-foreground">
+                        {winners.length > 0 ? winners.join(", ") : "—"}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-sm text-foreground">{price(round.startPrice)}</td>
                       <td className="px-4 py-3 text-right font-mono text-sm text-foreground">

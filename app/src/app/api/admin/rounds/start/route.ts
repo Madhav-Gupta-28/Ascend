@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
             success: true,
             roundId: created.roundId,
             txHash: created.txHash,
+            txHashscanUrl: `https://hashscan.io/${process.env.HEDERA_NETWORK || "testnet"}/transaction/${created.txHash}`,
             startPriceUsd: created.startPriceUsd,
             config,
             selectionPolicy: "FIRST_4_ELIGIBLE_BY_ID",

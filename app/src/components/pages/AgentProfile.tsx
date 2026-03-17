@@ -18,6 +18,7 @@ interface HOLAgentInfo {
   accountId?: string;
   inboundTopicId?: string;
   profileTopicId?: string;
+  profileUrl?: string;
 }
 
 interface AgentSignalRow {
@@ -47,11 +48,6 @@ function mirrorMessageUrl(topicId: string, sequenceNumber: number): string {
 function mirrorTopicUrl(topicId: string): string {
   const base = process.env.NEXT_PUBLIC_HEDERA_MIRROR_NODE || "https://testnet.mirrornode.hedera.com";
   return `${base}/api/v1/topics/${topicId}/messages?limit=1&order=desc`;
-}
-
-function holRegistrySearchUrl(query?: string): string {
-  if (!query) return "https://hol.org/registry";
-  return `https://hol.org/registry?q=${encodeURIComponent(query)}`;
 }
 
 function strategyFromName(name: string): string {
@@ -117,14 +113,19 @@ export default function AgentProfile() {
   useEffect(() => {
     setHolInfo(null);
     if (!agent?.name) return;
+    const normalize = (value: string) =>
+      value
+        .toLowerCase()
+        .replace(/^ascend:\s*/, "")
+        .trim();
     fetch("/api/hol/agents")
       .then((res) => res.json())
       .then((data) => {
         if (!Array.isArray(data?.agents)) return;
-        const lowerName = agent.name.toLowerCase();
+        const lowerName = normalize(agent.name);
         const info = data.agents.find((entry: HOLAgentInfo) => {
-          const candidate = entry.name?.toLowerCase() || "";
-          return candidate.includes(lowerName) || lowerName.includes(candidate);
+          const candidate = normalize(entry.name || "");
+          return candidate === lowerName || candidate.includes(lowerName) || lowerName.includes(candidate);
         });
         if (info) setHolInfo(info);
       })
@@ -160,7 +161,7 @@ export default function AgentProfile() {
   const avatar = getAgentDirectoryEntry(agent.name)?.avatar ?? "🤖";
   const strategy = strategyFromName(agent.name);
   const totalStaked = Number(formatHbar(agent.totalStaked));
-  const holHref = holRegistrySearchUrl(holInfo?.accountId || holInfo?.name || agent.name);
+  const holHref = holInfo?.profileUrl || "https://hol.org/registry";
   const ownerHref = hashscanAddressUrl(agent.owner);
   const registryHref = CONTRACT_ADDRESSES.agentRegistry
     ? hashscanAddressUrl(CONTRACT_ADDRESSES.agentRegistry)

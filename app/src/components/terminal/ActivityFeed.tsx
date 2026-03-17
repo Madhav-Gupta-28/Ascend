@@ -1,6 +1,7 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { TimelineEvent } from "@/lib/types";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 interface ActivityFeedProps {
   events: TimelineEvent[];
@@ -75,7 +76,13 @@ function eventTag(type: TimelineEvent["eventType"]): string {
 }
 
 export default function ActivityFeed({ events }: ActivityFeedProps) {
-  const rows = (events.length > 0 ? events : fallback).slice(0, 18);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const rows = (mounted ? (events.length > 0 ? events : fallback) : fallback).slice(0, 18);
 
   return (
     <section className="terminal-surface px-5 py-5 md:px-6 md:py-6">

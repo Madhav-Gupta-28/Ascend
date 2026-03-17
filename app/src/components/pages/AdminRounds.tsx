@@ -13,6 +13,7 @@ import {
     XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import Link from "next/link";
 
 type AdminAgentStatus = {
     id: number;
@@ -44,6 +45,16 @@ type AdminEligibleResponse = {
     error?: string;
 };
 
+type CreatedRoundInfo = {
+    roundId: number;
+    txHash: string;
+};
+
+function hashscanTxUrl(txHash: string): string {
+    const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet";
+    return `https://hashscan.io/${network}/transaction/${txHash}`;
+}
+
 export default function AdminRounds() {
     const queryClient = useQueryClient();
     const [commitSecs, setCommitSecs] = useState(45);
@@ -52,6 +63,7 @@ export default function AdminRounds() {
     const [entryFeeHbar, setEntryFeeHbar] = useState("0.5");
     const [adminKey, setAdminKey] = useState("");
     const [isStarting, setIsStarting] = useState(false);
+    const [createdRound, setCreatedRound] = useState<CreatedRoundInfo | null>(null);
 
     const { data, isLoading, refetch } = useQuery({
         queryKey: ["admin-round-eligible"],
@@ -100,6 +112,10 @@ export default function AdminRounds() {
             toast.success(`Round #${json.roundId} created`, {
                 id: "admin-round-start",
                 description: `Selected: ${(json.selectedAgents || []).map((a: AdminAgentStatus) => a.name).join(", ")}`,
+            });
+            setCreatedRound({
+                roundId: Number(json.roundId),
+                txHash: String(json.txHash || ""),
             });
 
             await Promise.all([
@@ -228,6 +244,32 @@ export default function AdminRounds() {
                             </>
                         )}
                     </button>
+
+                    {createdRound ? (
+                        <div className="rounded-lg border border-border bg-background px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                                Last Started Round
+                            </p>
+                            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                                <Link
+                                    href={`/round/${createdRound.roundId}`}
+                                    className="text-foreground underline-offset-2 hover:underline"
+                                >
+                                    Round #{createdRound.roundId}
+                                </Link>
+                                {createdRound.txHash ? (
+                                    <a
+                                        href={hashscanTxUrl(createdRound.txHash)}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-primary underline-offset-2 hover:underline"
+                                    >
+                                        Hashscan TX
+                                    </a>
+                                ) : null}
+                            </div>
+                        </div>
+                    ) : null}
                 </motion.section>
 
                 <motion.section

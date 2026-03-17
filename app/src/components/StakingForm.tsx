@@ -14,6 +14,10 @@ interface StakingFormProps {
   onClose: () => void;
 }
 
+function isExpectedWalletError(message: string): boolean {
+  return /proposal expired|request expired|rejected in wallet|user rejected|cancelled by user/i.test(message);
+}
+
 export default function StakingForm({ agentId, onClose }: StakingFormProps) {
   const [selectedAgent, setSelectedAgent] = useState(agentId || "");
   const [amount, setAmount] = useState("");
@@ -56,8 +60,11 @@ export default function StakingForm({ agentId, onClose }: StakingFormProps) {
       toast.success("Successfully staked on AI Agent!", { id: "stake-tx" });
       onClose();
     } catch (err: any) {
-      console.error("Staking failed:", err);
-      toast.error(`Transaction failed: ${err.message || "Unknown error"}`, { id: "stake-tx" });
+      const message = err?.message || "Unknown error";
+      if (!isExpectedWalletError(message)) {
+        console.warn("Staking failed:", err);
+      }
+      toast.error(`Transaction failed: ${message}`, { id: "stake-tx" });
     } finally {
       setIsSubmitting(false);
     }
