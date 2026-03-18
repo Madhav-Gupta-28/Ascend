@@ -4,25 +4,15 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAgent } from "@/hooks/useAgents";
-import { usePredictionsFeed } from "@/hooks/useHCSMessages";
+import { useAgentRegistrationProof } from "@/hooks/useAgentProofs";
 import { useIntelligenceTimeline } from "@/hooks/useIntelligenceTimeline";
 import { useResolvedTransactionLinks } from "@/hooks/useResolvedTransactionLinks";
 import { CONTRACT_ADDRESSES } from "@/lib/contracts";
 import { formatHbar } from "@/lib/hedera";
-import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 import type { TimelineEvent } from "@/lib/types";
 import { hashscanAddressUrl, hashscanTopicUrl } from "@/lib/explorer";
-
-interface HOLAgentInfo {
-  uaid?: string;
-  name: string;
-  accountId?: string;
-  inboundTopicId?: string;
-  profileTopicId?: string;
-  profileUrl?: string | null;
-  onChainAgentId?: number | null;
-}
 
 interface AgentSignalRow {
   key: string;
@@ -31,6 +21,66 @@ interface AgentSignalRow {
   confidence: number | null;
   timestampIso: string;
   proofHref: string | null;
+  proofLabel: "Tx" | "Topic" | null;
+}
+
+interface AgentProtocolSignal {
+  roundId?: number;
+  direction: "UP" | "DOWN" | "UNKNOWN";
+  confidence: number | null;
+  timestamp: string;
+  reasoning: string;
+  summary: string;
+  txHash?: string;
+  hashscanUrl?: string;
+}
+
+function useAgentSignals(agentId: number, limit: number = 220) {
+  return useQuery({
+    queryKey: ["agent-signals", agentId, limit],
+    queryFn: async (): Promise<AgentProtocolSignal[]> => {
+      if (!Number.isFinite(agentId) || agentId <= 0) return [];
+      const response = await fetch(`/api/protocol/agent/${agentId}/signals?limit=${limit}`, {
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.error || "Failed to load agent signals");
+      }
+      const rawSignals = Array.isArray(data?.signals) ? data.signals : [];
+      return rawSignals
+        .map((signal: any) => {
+          const timestamp = typeof signal?.timestamp === "string" ? signal.timestamp : "";
+          if (!timestamp) return null;
+          return {
+            roundId: Number.isFinite(Number(signal?.roundId)) ? Number(signal.roundId) : undefined,
+            direction:
+              signal?.direction === "UP" || signal?.direction === "DOWN"
+                ? signal.direction
+                : "UNKNOWN",
+            confidence:
+              typeof signal?.confidence === "number" ? signal.confidence : null,
+            timestamp,
+            reasoning: typeof signal?.reasoning === "string" ? signal.reasoning : "",
+            summary: typeof signal?.summary === "string" ? signal.summary : "",
+            txHash:
+              typeof signal?.txHash === "string" && signal.txHash.length > 0
+                ? signal.txHash
+                : undefined,
+            hashscanUrl:
+              typeof signal?.hashscanUrl === "string" && signal.hashscanUrl.length > 0
+                ? signal.hashscanUrl
+                : undefined,
+          } satisfies AgentProtocolSignal;
+        })
+        .filter(
+          (signal: AgentProtocolSignal | null): signal is AgentProtocolSignal =>
+            signal !== null,
+        );
+    },
+    enabled: Number.isFinite(agentId) && agentId > 0,
+    refetchInterval: 15_000,
+  });
 }
 
 function strategyFromName(name: string): string {
@@ -41,26 +91,6 @@ function strategyFromName(name: string): string {
     oracle: "Meta-AI",
   };
   return mapping[name.toLowerCase()] || "Autonomous Strategy";
-}
-
-function directionFromUnknown(value: unknown): "UP" | "DOWN" | "UNKNOWN" {
-  if (value === "UP" || value === 0 || value === "0") return "UP";
-  if (value === "DOWN" || value === 1 || value === "1") return "DOWN";
-  if (typeof value === "string") {
-    const upper = value.toUpperCase();
-    if (upper === "UP") return "UP";
-    if (upper === "DOWN") return "DOWN";
-  }
-  return "UNKNOWN";
-}
-
-function asIsoFromConsensus(consensusTs?: string): string {
-  if (!consensusTs) return new Date(0).toISOString();
-  const [secondsRaw, nanosRaw = "0"] = consensusTs.split(".");
-  const seconds = Number(secondsRaw);
-  const nanos = Number(nanosRaw.padEnd(9, "0").slice(0, 9));
-  const millis = seconds * 1000 + Math.floor(nanos / 1_000_000);
-  return new Date(millis).toISOString();
 }
 
 function formatUtcTime(iso: string): string {
@@ -77,10 +107,18 @@ export default function AgentProfile() {
   const agentIdNum = Number.parseInt(idStr, 10);
 
   const { data: agent, isLoading: isAgentLoading } = useAgent(agentIdNum);
-  const { data: feed = [], isLoading: isFeedLoading } = usePredictionsFeed(220);
+  const { data: signals = [], isLoading: isSignalsLoading } = useAgentSignals(agentIdNum, 220);
+  const { data: registrationTxHash = null } = useAgentRegistrationProof(agentIdNum);
   const { data: timelineEvents = [] } = useIntelligenceTimeline(
     220,
     agent?.name ? { agentName: agent.name } : undefined,
+  );
+  const signalTxHashes = useMemo(
+    () =>
+      signals
+        .map((signal) => signal.txHash || null)
+        .filter((value): value is string => typeof value === "string" && value.length > 0),
+    [signals],
   );
   const timelineTxHashes = useMemo(
     () =>
@@ -89,49 +127,13 @@ export default function AgentProfile() {
         .filter((value): value is string => typeof value === "string" && value.length > 0),
     [timelineEvents],
   );
-  const { getTransactionUrl } = useResolvedTransactionLinks(timelineTxHashes);
-  const [holInfo, setHolInfo] = useState<HOLAgentInfo | null>(null);
+  const resolvedTxInputs = useMemo(
+    () => [...timelineTxHashes, ...signalTxHashes, registrationTxHash],
+    [timelineTxHashes, signalTxHashes, registrationTxHash],
+  );
+  const { getTransactionUrl } = useResolvedTransactionLinks(resolvedTxInputs);
   const [ownerHref, setOwnerHref] = useState<string | null>(null);
   const [registryHref, setRegistryHref] = useState<string | null>(null);
-
-  useEffect(() => {
-    setHolInfo(null);
-    if (!agent?.name) return;
-    const normalize = (value: string) =>
-      value
-        .toLowerCase()
-        .replace(/^ascend:\s*/, "")
-        .trim();
-    fetch("/api/hol/agents")
-      .then((res) => res.json())
-      .then((data) => {
-        if (!Array.isArray(data?.agents)) return;
-        const byAgentId = data.agents.find(
-          (entry: HOLAgentInfo) =>
-            entry.onChainAgentId === agent.id &&
-            typeof entry.profileUrl === "string" &&
-            entry.profileUrl.length > 0,
-        );
-        if (byAgentId) {
-          setHolInfo(byAgentId);
-          return;
-        }
-
-        const lowerName = normalize(agent.name);
-        const nameMatches = data.agents.filter((entry: HOLAgentInfo) => {
-          const candidate = normalize(entry.name || "");
-          return (
-            candidate === lowerName &&
-            typeof entry.profileUrl === "string" &&
-            entry.profileUrl.length > 0
-          );
-        });
-        if (nameMatches.length === 1) {
-          setHolInfo(nameMatches[0]);
-        }
-      })
-      .catch(() => {});
-  }, [agent?.id, agent?.name]);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,6 +197,18 @@ export default function AgentProfile() {
     },
     [getTransactionUrl],
   );
+  const timelineProofMeta = useCallback(
+    (event?: TimelineEvent): { href: string; label: "Tx" | "Topic" } | null => {
+      if (!event) return null;
+      if (event.transactionHash) {
+        const href = getTransactionUrl(event.transactionHash);
+        return href ? { href, label: "Tx" } : null;
+      }
+      if (event.topicId) return { href: hashscanTopicUrl(event.topicId), label: "Topic" };
+      return null;
+    },
+    [getTransactionUrl],
+  );
 
   const roundProofByRound = useMemo(() => {
     const map = new Map<number, string>();
@@ -218,46 +232,23 @@ export default function AgentProfile() {
   }, [timelineEvents, timelineProofHref]);
 
   const signalRows = useMemo((): AgentSignalRow[] => {
-    if (!agent) return [];
-
-    const rows: AgentSignalRow[] = [];
-    for (const msg of feed) {
-      const parsedAgentId = String(msg.parsed.agentId ?? "").toLowerCase();
-      const isSameAgent =
-        parsedAgentId === String(agent.id) || parsedAgentId === agent.name.toLowerCase();
-      if (!isSameAgent) continue;
-
-      const parsedRoundId =
-        typeof msg.parsed.roundId === "number"
-          ? msg.parsed.roundId
-          : typeof msg.parsed.roundId === "string"
-            ? Number.parseInt(msg.parsed.roundId, 10)
-            : NaN;
-      const roundId = Number.isFinite(parsedRoundId) ? parsedRoundId : undefined;
-
-      const confidenceValue =
-        typeof msg.parsed.confidence === "number"
-          ? msg.parsed.confidence
-          : typeof msg.parsed.confidence === "string"
-            ? Number.parseFloat(msg.parsed.confidence)
-            : null;
-
-      const fallbackProof =
-        msg.raw.topicId ? hashscanTopicUrl(msg.raw.topicId) : null;
-
-      rows.push({
-        key: `${msg.raw.topicId}-${msg.raw.sequenceNumber}-${roundId ?? "x"}`,
-        roundId,
-        direction: directionFromUnknown(msg.parsed.direction),
-        confidence: Number.isFinite(confidenceValue as number) ? confidenceValue : null,
-        timestampIso: asIsoFromConsensus(msg.raw.consensusTimestamp),
-        proofHref: (roundId != null ? roundProofByRound.get(roundId) : null) ?? fallbackProof,
-      });
-    }
+    const rows = signals.map((signal, index) => {
+      const txProof = signal.hashscanUrl ?? getTransactionUrl(signal.txHash);
+      const roundProof = signal.roundId != null ? roundProofByRound.get(signal.roundId) : null;
+      return {
+        key: `${signal.roundId ?? "x"}-${signal.timestamp}-${index}`,
+        roundId: signal.roundId,
+        direction: signal.direction,
+        confidence: signal.confidence,
+        timestampIso: signal.timestamp,
+        proofHref: txProof ?? roundProof ?? null,
+        proofLabel: txProof ? "Tx" : roundProof ? "Topic" : null,
+      } satisfies AgentSignalRow;
+    });
 
     rows.sort((a, b) => new Date(b.timestampIso).getTime() - new Date(a.timestampIso).getTime());
     return rows.slice(0, 40);
-  }, [agent, feed, roundProofByRound]);
+  }, [signals, getTransactionUrl, roundProofByRound]);
 
   const sortedTimeline = useMemo(() => {
     const events = [...timelineEvents];
@@ -291,13 +282,9 @@ export default function AgentProfile() {
     );
   }
 
-  const avatar = getAgentDirectoryEntry(agent.name)?.avatar ?? "🤖";
   const strategy = strategyFromName(agent.name);
   const totalStaked = Number(formatHbar(agent.totalStaked));
-  const holHref =
-    typeof holInfo?.profileUrl === "string" && holInfo.profileUrl.length > 0
-      ? holInfo.profileUrl
-      : null;
+  const registrationTxHref = registrationTxHash ? getTransactionUrl(registrationTxHash) : null;
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 pb-16 md:space-y-10">
@@ -334,21 +321,6 @@ export default function AgentProfile() {
         <p className="mt-4 text-sm text-muted-foreground">{agent.description}</p>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {holHref ? (
-            <a
-              href={holHref}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
-            >
-              HOL Registry
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-              HOL Pending
-            </span>
-          )}
           {registryHref ? (
             <a
               href={registryHref}
@@ -371,25 +343,14 @@ export default function AgentProfile() {
               <ExternalLink className="h-3 w-3" />
             </a>
           ) : null}
-          {holInfo?.inboundTopicId ? (
+          {registrationTxHref ? (
             <a
-              href={hashscanTopicUrl(holInfo.inboundTopicId)}
+              href={registrationTxHref}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
             >
-              HCS-10 Inbound
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          ) : null}
-          {holInfo?.profileTopicId ? (
-            <a
-              href={hashscanTopicUrl(holInfo.profileTopicId)}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 rounded-sm border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
-            >
-              HCS-11 Profile
+              Registration Tx
               <ExternalLink className="h-3 w-3" />
             </a>
           ) : null}
@@ -446,7 +407,7 @@ export default function AgentProfile() {
               </tr>
             </thead>
             <tbody>
-              {isFeedLoading ? (
+              {isSignalsLoading ? (
                 <tr>
                   <td colSpan={5} className="px-5 py-12 text-center">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
@@ -487,7 +448,7 @@ export default function AgentProfile() {
                           rel="noreferrer"
                           className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
                         >
-                          Link
+                          {row.proofLabel ?? "Link"}
                           <ExternalLink className="h-3 w-3" />
                         </a>
                       ) : (
@@ -516,7 +477,7 @@ export default function AgentProfile() {
             <p className="py-6 text-center text-sm text-muted-foreground">No timeline events for this agent yet.</p>
           ) : (
             sortedTimeline.map((event) => {
-              const href = timelineProofHref(event);
+              const proof = timelineProofMeta(event);
               return (
                 <div
                   key={event.id}
@@ -524,14 +485,14 @@ export default function AgentProfile() {
                 >
                   <p className="font-mono text-[11px] text-muted-foreground">{formatUtcTime(event.timestamp)}</p>
                   <p className="font-mono text-[12px] text-foreground">{event.message}</p>
-                  {href ? (
+                  {proof?.href ? (
                     <a
-                      href={href}
+                      href={proof.href}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
                     >
-                      Link
+                      {proof.label}
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   ) : (

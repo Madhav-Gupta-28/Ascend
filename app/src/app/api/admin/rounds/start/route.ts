@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { hashscanTransactionUrl } from "@/lib/explorer";
 import {
     ADMIN_SELECTION_POLICY,
     createAdminRound,
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
             success: true,
             roundId: created.roundId,
             txHash: created.txHash,
-            txHashscanUrl: `https://hashscan.io/${process.env.HEDERA_NETWORK || "testnet"}/transaction/${created.txHash}`,
+            txHashscanUrl: hashscanTransactionUrl(created.txHash),
             startPriceUsd: created.startPriceUsd,
             config,
             selectionPolicy: ADMIN_SELECTION_POLICY,

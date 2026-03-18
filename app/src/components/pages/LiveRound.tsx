@@ -126,6 +126,17 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
     if (event.topicId) return hashscanTopicUrl(event.topicId);
     return null;
   };
+  const proofMeta = (
+    event?: TimelineEvent,
+  ): { href: string; label: "Tx" | "Topic" } | null => {
+    if (!event) return null;
+    if (event.transactionHash) {
+      const href = getTransactionUrl(event.transactionHash);
+      return href ? { href, label: "Tx" } : null;
+    }
+    if (event.topicId) return { href: hashscanTopicUrl(event.topicId), label: "Topic" };
+    return null;
+  };
 
   const createdEvents = roundEventsAsc.filter((event) => event.eventType === "COMMIT_PHASE_STARTED");
   const createdEvent = createdEvents[0];
@@ -321,7 +332,7 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
             const commitEvent =
               commitEventsForAgent.find((event) => Boolean(event.transactionHash)) ??
               commitEventsForAgent[0];
-            const proof = proofHref(revealEvent) ?? proofHref(commitEvent);
+            const proof = proofMeta(revealEvent) ?? proofMeta(commitEvent);
 
             const avatar = getAgentDirectoryEntry(agent.name)?.avatar ?? "🤖";
             const cardTone =
@@ -343,14 +354,14 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
                       </p>
                     </div>
                   </div>
-                  {proof ? (
+                  {proof?.href ? (
                     <a
-                      href={proof}
+                      href={proof.href}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
                     >
-                      Proof
+                      {proof.label}
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   ) : null}
@@ -392,19 +403,19 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
             <p className="py-6 text-center text-sm text-muted-foreground">No round events indexed yet.</p>
           ) : (
             roundEventsDesc.slice(0, 30).map((event) => {
-              const href = proofHref(event);
+              const proof = proofMeta(event);
               return (
                 <div key={event.id} className="grid grid-cols-[88px_1fr_auto] items-start gap-3 border-b border-border/70 py-2 last:border-b-0">
                   <p className="font-mono text-[11px] text-muted-foreground">{formatUtcTime(event.timestamp)}</p>
                   <p className="font-mono text-[12px] text-foreground">{event.message}</p>
-                  {href ? (
+                  {proof?.href ? (
                     <a
-                      href={href}
+                      href={proof.href}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
                     >
-                      Link
+                      {proof.label}
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   ) : (

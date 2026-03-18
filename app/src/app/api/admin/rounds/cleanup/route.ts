@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { hashscanTransactionUrl } from "@/lib/explorer";
 import {
     cleanupStaleAdminRounds,
     inspectAdminRoundHealth,
@@ -14,10 +15,6 @@ function assertAdminAccess(req: NextRequest): void {
     if (provided !== requiredKey) {
         throw new Error("Unauthorized: invalid admin key");
     }
-}
-
-function txHashscanUrl(txHash: string): string {
-    return `https://hashscan.io/${process.env.HEDERA_NETWORK || "testnet"}/transaction/${txHash}`;
 }
 
 export async function GET() {
@@ -54,7 +51,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
             success: true,
             ...cleaned,
-            cancelledStaleRoundTxUrls: cleaned.cancelledTxHashes.map((txHash) => txHashscanUrl(txHash)),
+            cancelledStaleRoundTxUrls: cleaned.cancelledTxHashes.map((txHash) => hashscanTransactionUrl(txHash)),
             cleanedAt: new Date().toISOString(),
         });
     } catch (error: any) {
@@ -67,4 +64,3 @@ export async function POST(req: NextRequest) {
         );
     }
 }
-

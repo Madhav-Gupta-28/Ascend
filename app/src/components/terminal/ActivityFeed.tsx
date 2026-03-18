@@ -177,12 +177,17 @@ export default function ActivityFeed({ events }: ActivityFeedProps) {
           <div className="px-3 py-2 md:px-4">
             {rows.map((event, index) => {
               const tag = eventTag(event.eventType);
-              const proofHref =
-                event.transactionHash
-                  ? getTransactionUrl(event.transactionHash)
-                  : event.topicId
-                    ? hashscanTopicUrl(event.topicId)
-                    : null;
+              const proofMeta = event.transactionHash
+                ? {
+                    href: getTransactionUrl(event.transactionHash),
+                    label: "Tx" as const,
+                  }
+                : event.topicId
+                  ? {
+                      href: hashscanTopicUrl(event.topicId),
+                      label: "Topic" as const,
+                    }
+                  : null;
               return (
                 <div
                   key={`${event.id}-${index}`}
@@ -195,14 +200,14 @@ export default function ActivityFeed({ events }: ActivityFeedProps) {
                   <p className={`font-mono text-[12px] leading-5 ${tone(event.message)}`}>
                     {highlightAgentMessage(event.message, event.agentName)}
                   </p>
-                  {proofHref ? (
+                  {proofMeta?.href ? (
                     <a
-                      href={proofHref}
+                      href={proofMeta.href}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
                     >
-                      Hashscan
+                      {proofMeta.label}
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   ) : (

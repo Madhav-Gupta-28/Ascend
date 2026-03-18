@@ -1,24 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useAgents } from "@/hooks/useAgents";
+import { useAgentRegistrationProofs } from "@/hooks/useAgentProofs";
+import { useResolvedTransactionLinks } from "@/hooks/useResolvedTransactionLinks";
 import { useTotalValueLocked } from "@/hooks/useStaking";
 import Link from "next/link";
-import { Loader2, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck } from "lucide-react";
+import { Loader2, ArrowRight, ExternalLink, ShieldCheck } from "lucide-react";
 import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
 import { formatHbar } from "@/lib/hedera";
 import { CONTRACT_ADDRESSES } from "@/lib/contracts";
-import type { Agent } from "@/lib/types";
 import { hashscanAddressUrl } from "@/lib/explorer";
-
-interface HOLAgentInfo {
-  uaid?: string;
-  name: string;
-  accountId?: string;
-  profileUrl?: string | null;
-  onChainAgentId?: number | null;
-}
 
 function formatCompact(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}m`;
@@ -28,29 +21,26 @@ function formatCompact(value: number): string {
 
 export default function AgentsDirectory() {
   const { data: agents = [], isLoading } = useAgents();
+  const agentIds = useMemo(() => agents.map((agent) => Number(agent.id)), [agents]);
+  const { data: registrationTxByAgent = {} } = useAgentRegistrationProofs(agentIds);
+  const registrationTxHashes = useMemo(
+    () => Object.values(registrationTxByAgent),
+    [registrationTxByAgent],
+  );
+  const { getTransactionUrl } = useResolvedTransactionLinks(registrationTxHashes);
   const { data: tvl = 0n } = useTotalValueLocked();
-  const [holAgents, setHolAgents] = useState<HOLAgentInfo[]>([]);
-  const [onChainRegistryHref, setOnChainRegistryHref] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "active">("all");
-
-  useEffect(() => {
-    fetch("/api/hol/agents")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.agents) setHolAgents(data.agents);
-      })
-      .catch(() => {});
-  }, []);
+  const [onChainRegistryHref, setOnChainRegistryHref] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const address = CONTRACT_ADDRESSES.agentRegistry;
-    if (!address) {
+    const contractAddress = CONTRACT_ADDRESSES.agentRegistry;
+    if (!contractAddress) {
       setOnChainRegistryHref(null);
       return;
     }
 
-    fetch(`/api/mirror/entities/resolve?kind=contract&id=${encodeURIComponent(address)}`)
+    fetch(`/api/mirror/entities/resolve?kind=contract&id=${encodeURIComponent(contractAddress)}`)
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
@@ -58,10 +48,10 @@ export default function AgentsDirectory() {
           setOnChainRegistryHref(data.hashscanUrl);
           return;
         }
-        setOnChainRegistryHref(hashscanAddressUrl(address));
+        setOnChainRegistryHref(hashscanAddressUrl(contractAddress));
       })
       .catch(() => {
-        if (!cancelled) setOnChainRegistryHref(hashscanAddressUrl(address));
+        if (!cancelled) setOnChainRegistryHref(hashscanAddressUrl(contractAddress));
       });
 
     return () => {
@@ -81,26 +71,6 @@ export default function AgentsDirectory() {
     filter === "active"
       ? sortedAgents.filter((a) => a.totalPredictions > 0 || a.credScore !== 0)
       : sortedAgents;
-
-  const getHolInfo = (agent: Agent): HOLAgentInfo | undefined => {
-    const normalize = (value: string) =>
-      value
-        .toLowerCase()
-        .replace(/^ascend:\s*/, "")
-        .trim();
-
-    const idMatch = holAgents.find(
-      (entry) => entry.onChainAgentId === agent.id && typeof entry.profileUrl === "string" && entry.profileUrl.length > 0
-    );
-    if (idMatch) return idMatch;
-
-    const lowerName = normalize(agent.name);
-    const nameMatches = holAgents.filter((entry) => {
-      const holName = normalize(entry.name || "");
-      return holName === lowerName && typeof entry.profileUrl === "string" && entry.profileUrl.length > 0;
-    });
-    return nameMatches.length === 1 ? nameMatches[0] : undefined;
-  };
 
   if (isLoading) {
     return (
@@ -130,16 +100,7 @@ export default function AgentsDirectory() {
           </div>
           <div className="inline-flex items-center gap-2 rounded-sm border border-secondary/35 bg-secondary/10 px-3 py-2">
             <ShieldCheck className="h-3.5 w-3.5 text-secondary" />
-            <a
-              href="https://hol.org/registry"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
-            >
-              HOL Directory
-              <ExternalLink className="h-3 w-3" />
-            </a>
-            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-secondary/70">+</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-secondary">On-chain Verified</span>
             {onChainRegistryHref ? (
               <a
                 href={onChainRegistryHref}
@@ -150,11 +111,7 @@ export default function AgentsDirectory() {
                 AgentRegistry
                 <ExternalLink className="h-3 w-3" />
               </a>
-            ) : (
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-secondary">
-                On-chain
-              </span>
-            )}
+            ) : null}
           </div>
         </div>
       </motion.section>
@@ -224,11 +181,11 @@ export default function AgentsDirectory() {
               ) : (
                 filteredAgents.map((agent, index) => {
                   const avatar = getAgentDirectoryEntry(agent.name)?.avatar ?? "🤖";
-                  const holInfo = getHolInfo(agent);
-                  const holHref =
-                    typeof holInfo?.profileUrl === "string" && holInfo.profileUrl.length > 0
-                      ? holInfo.profileUrl
-                      : null;
+                  const ownerHref = hashscanAddressUrl(agent.owner);
+                  const registrationTxHash = registrationTxByAgent[agent.id];
+                  const registrationTxHref = registrationTxHash
+                    ? getTransactionUrl(registrationTxHash)
+                    : null;
                   const staked = Number(formatHbar(agent.totalStaked));
                   const model = agent.description ? agent.description.split(".")[0] : "Autonomous Strategy";
 
@@ -240,22 +197,26 @@ export default function AgentsDirectory() {
                           <span className="text-xl">{avatar}</span>
                           <div>
                             <p className="text-sm font-semibold text-foreground">{agent.name}</p>
-                            {holHref ? (
+                            <a
+                              href={ownerHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-0.5 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
+                            >
+                              Owner
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                            {registrationTxHref ? (
                               <a
-                                href={holHref}
+                                href={registrationTxHref}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="mt-0.5 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
+                                className="mt-1 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
                               >
-                                <CheckCircle2 className="h-3 w-3" />
-                                HOL
+                                Registration Tx
                                 <ExternalLink className="h-3 w-3" />
                               </a>
-                            ) : (
-                              <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                                HOL Pending
-                              </p>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </td>
