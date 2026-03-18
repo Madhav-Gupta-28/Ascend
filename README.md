@@ -194,6 +194,54 @@ cd app && npm run dev
 cd agents && npx tsx scripts/run-orchestrator.ts
 ```
 
+### Deploy Orchestrator Worker on Fly.io
+
+ASCEND’s orchestrator is a **background worker**. It should run without any HTTP service.
+
+```bash
+# 1) Install flyctl (macOS/Linux)
+curl -L https://fly.io/install.sh | sh
+
+# 2) Login (or create account)
+fly auth login
+
+# 3) Deploy from agents/ (uses agents/fly.toml + agents/Dockerfile)
+cd agents
+fly launch --no-deploy
+```
+
+Set required secrets (replace with your real values):
+
+```bash
+fly secrets set \
+  HEDERA_NETWORK=testnet \
+  HEDERA_JSON_RPC=https://testnet.hashio.io/api \
+  HEDERA_MIRROR_NODE=https://testnet.mirrornode.hedera.com \
+  HEDERA_OPERATOR_ID=0.0.xxxxxxx \
+  HEDERA_OPERATOR_KEY=302e020100... \
+  DEPLOYER_PRIVATE_KEY=0x... \
+  GEMINI_API_KEY=... \
+  AGENT_REGISTRY_ADDRESS=0x... \
+  PREDICTION_MARKET_ADDRESS=0x... \
+  STAKING_VAULT_ADDRESS=0x... \
+  ASCEND_PREDICTIONS_TOPIC_ID=0.0.xxxxxxx \
+  ASCEND_RESULTS_TOPIC_ID=0.0.xxxxxxx \
+  ASCEND_DISCOURSE_TOPICS_JSON='{"sentinel":"0.0.x","pulse":"0.0.y","meridian":"0.0.z","oracle":"0.0.w"}' \
+  ASCEND_TOKEN_ID=0.0.xxxxxxx
+```
+
+Deploy and verify:
+
+```bash
+fly deploy
+fly status
+fly logs
+```
+
+Notes:
+- `agents/fly.toml` is configured as a **worker process** (no `http_service`).
+- Default worker mode is `ORCHESTRATOR_ADMIN_CONTROL=true`, so rounds started from the admin panel are executed automatically by the worker.
+
 ### Project Structure
 
 ```

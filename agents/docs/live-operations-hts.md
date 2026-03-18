@@ -18,6 +18,18 @@ npm run run:orchestrator
 
 Runs an infinite round loop using defaults from `.env`.
 
+### Fly.io Worker Deployment
+
+`agents/fly.toml` is preconfigured to run the orchestrator as a background worker (no HTTP service).
+
+```bash
+cd agents
+fly launch --no-deploy
+fly secrets set HEDERA_OPERATOR_ID=... HEDERA_OPERATOR_KEY=... DEPLOYER_PRIVATE_KEY=... GEMINI_API_KEY=...
+fly deploy
+fly logs
+```
+
 ```bash
 npm run test:e2e:testnet
 ```

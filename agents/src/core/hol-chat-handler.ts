@@ -50,8 +50,6 @@ export class HOLChatHandler {
     private groq: ReturnType<typeof createOpenAI> | null;
     private chatState: ChatState;
     private stateFilePath: string;
-    private initialized = false;
-
     constructor(config: HOLChatConfig) {
         this.config = config;
 

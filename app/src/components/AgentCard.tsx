@@ -2,15 +2,7 @@ import { Agent } from "@/lib/types";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { TrendingUp, Users } from "lucide-react";
-import { getAgentDirectoryEntry, displayAgentName } from "@/lib/agentDirectory";
-
-const strategyColors: Record<string, string> = {
-  "Technical Analysis": "bg-primary/15 text-primary border-primary/20",
-  "Sentiment & Momentum": "bg-pink-500/15 text-pink-400 border-pink-500/20",
-  "Mean Reversion": "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  "Meta-Analysis": "bg-secondary/15 text-secondary border-secondary/20",
-};
-
+import { getAgentDirectoryEntry, displayAgentName, STRATEGY_COLORS } from "@/lib/agentDirectory";
 import { formatHbar } from "@/lib/hedera";
 
 export default function AgentCard({ agent, index }: { agent: Agent; index: number }) {
@@ -50,7 +42,7 @@ export default function AgentCard({ agent, index }: { agent: Agent; index: numbe
             <div className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
               {displayAgentName(agent.name)}
             </div>
-            <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium ${strategyColors[strategy] || "bg-muted text-muted-foreground"}`}>
+            <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium ${STRATEGY_COLORS[strategy] || "bg-muted text-muted-foreground"}`}>
               {strategy}
             </span>
           </div>

@@ -181,8 +181,8 @@ export class ContractClient {
             console.warn("⚠️ Hashio event log delayed. Polling getAgentCount()...");
             const initialCount = Number(await this.registry.getAgentCount({ blockTag: "latest" }));
             let latestCount = initialCount;
-            for (let i = 0; i < 5; i++) {
-                await new Promise((r) => setTimeout(r, 2000));
+            for (let i = 0; i < 8; i++) {
+                await new Promise((r) => setTimeout(r, Math.min(2000 * Math.pow(2, i), 30000)));
                 const newCount = Number(await this.registry.getAgentCount({ blockTag: "latest" }));
                 latestCount = newCount;
                 if (newCount > initialCount) return BigInt(newCount);
@@ -246,8 +246,8 @@ export class ContractClient {
             // Hedera testnet RPC nodes can be heavily delayed for state reads right after a write.
             const initialCount = Number(await this.market.getRoundCount({ blockTag: "latest" }));
             let latestCount = initialCount;
-            for (let i = 0; i < 5; i++) {
-                await new Promise((r) => setTimeout(r, 2000));
+            for (let i = 0; i < 8; i++) {
+                await new Promise((r) => setTimeout(r, Math.min(2000 * Math.pow(2, i), 30000)));
                 const newCount = Number(await this.market.getRoundCount({ blockTag: "latest" }));
                 latestCount = newCount;
                 if (newCount > initialCount) return BigInt(newCount);
@@ -384,11 +384,6 @@ export class ContractClient {
         await tx.wait();
     }
 
-    // Backward-compatible wrapper used by older callers.
-    async stakeOnAgent(agentId: number, amountHbar: number): Promise<void> {
-        await this.stake(agentId, amountHbar);
-    }
-
     async unstake(agentId: number, amountHbar: number): Promise<void> {
         const amountTinybar = ethers.parseUnits(amountHbar.toString(), 8);
         const tx: ContractTransactionResponse = await this.vault.unstake(
@@ -437,11 +432,6 @@ export class ContractClient {
         return BigInt(await this.vault.getTotalStakedOnAgent(agentId));
     }
 
-    // Backward-compatible wrapper used by older callers.
-    async getAgentTVL(agentId: number): Promise<string> {
-        return this.getTotalStakedOnAgent(agentId);
-    }
-
     async getTotalTVL(): Promise<string> {
         const tvl = await this.vault.getTVL();
         return ethers.formatUnits(tvl, 8);
@@ -455,11 +445,6 @@ export class ContractClient {
     async getPendingReward(agentId: number, userAddress: string): Promise<string> {
         const pendingReward = await this.vault.getPendingReward(agentId, userAddress);
         return ethers.formatUnits(pendingReward, 8);
-    }
-
-    // Backward-compatible wrapper used by older callers.
-    async calculatePendingReward(agentId: number, userAddress: string): Promise<string> {
-        return this.getPendingReward(agentId, userAddress);
     }
 
     getSignerAddress(): string {

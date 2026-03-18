@@ -250,9 +250,11 @@ export class HCS10CommunicationNetwork {
     private state: HCS10NetworkState;
     private bootstrapped = false;
     private readonly processedMessageIds = new Set<string>();
+    private static readonly MAX_PROCESSED_IDS = 10_000;
     private readonly reasoningInbox: ReasoningInboxItem[] = [];
     private readonly questionInbox: QuestionInboxItem[] = [];
     private readonly answerInbox: AnswerInboxItem[] = [];
+    private static readonly MAX_INBOX_SIZE = 500;
 
     constructor(config: HCS10NetworkConfig, transport?: TopicTransport) {
         this.config = {
@@ -728,6 +730,16 @@ export class HCS10CommunicationNetwork {
         if (!payload) return;
         if (this.processedMessageIds.has(payload.messageId)) return;
         this.processedMessageIds.add(payload.messageId);
+        // Evict oldest entries to prevent unbounded memory growth
+        if (this.processedMessageIds.size > HCS10CommunicationNetwork.MAX_PROCESSED_IDS) {
+            const excess = this.processedMessageIds.size - HCS10CommunicationNetwork.MAX_PROCESSED_IDS;
+            let removed = 0;
+            for (const id of this.processedMessageIds) {
+                if (removed >= excess) break;
+                this.processedMessageIds.delete(id);
+                removed++;
+            }
+        }
 
         if (payload.kind === "reasoning.publish") {
             this.reasoningInbox.push({
@@ -737,6 +749,7 @@ export class HCS10CommunicationNetwork {
                 sequenceNumber: message.sequenceNumber,
                 consensusTimestamp: message.consensusTimestamp,
             });
+            if (this.reasoningInbox.length > HCS10CommunicationNetwork.MAX_INBOX_SIZE) this.reasoningInbox.splice(0, this.reasoningInbox.length - HCS10CommunicationNetwork.MAX_INBOX_SIZE);
             return;
         }
 
@@ -750,6 +763,7 @@ export class HCS10CommunicationNetwork {
                 sequenceNumber: message.sequenceNumber,
                 consensusTimestamp: message.consensusTimestamp,
             });
+            if (this.questionInbox.length > HCS10CommunicationNetwork.MAX_INBOX_SIZE) this.questionInbox.splice(0, this.questionInbox.length - HCS10CommunicationNetwork.MAX_INBOX_SIZE);
             return;
         }
 

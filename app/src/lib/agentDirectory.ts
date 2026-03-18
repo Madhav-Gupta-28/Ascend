@@ -49,3 +49,11 @@ export function getAgentDirectoryEntry(agentIdOrName: string): AgentDirectoryEnt
     (agent) => agent.id === normalized || agent.name.toLowerCase() === normalized,
   );
 }
+
+/** Shared strategy→color mapping used by AgentCard, AgentProfile, etc. */
+export const STRATEGY_COLORS: Record<string, string> = {
+  "Technical Analysis": "bg-primary/15 text-primary border-primary/20",
+  "Sentiment & Momentum": "bg-pink-500/15 text-pink-400 border-pink-500/20",
+  "Mean Reversion": "bg-amber-500/15 text-amber-400 border-amber-500/20",
+  "Meta-Analysis": "bg-secondary/15 text-secondary border-secondary/20",
+};

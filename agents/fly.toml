@@ -1,0 +1,20 @@
+app = "ascend-orchestrator-worker"
+primary_region = "sin"
+kill_signal = "SIGINT"
+kill_timeout = "30s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[processes]
+  worker = "npm run run:orchestrator"
+
+[env]
+  NODE_ENV = "production"
+  ORCHESTRATOR_ADMIN_CONTROL = "true"
+  ORCHESTRATOR_PARTICIPANT_COUNT = "4"
+  ORCHESTRATOR_COMMIT_SECS = "180"
+  ORCHESTRATOR_REVEAL_SECS = "60"
+  ORCHESTRATOR_ROUND_SECS = "300"
+  ORCHESTRATOR_ENTRY_FEE_HBAR = "1"
+  ORCHESTRATOR_COOLDOWN_SECS = "15"

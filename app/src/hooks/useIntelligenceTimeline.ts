@@ -6,13 +6,17 @@ import { CONTRACT_ADDRESSES, AGENT_REGISTRY_ABI, PREDICTION_MARKET_ABI, TOPIC_ID
 import type { TimelineEvent, TimelineEventType } from "@/lib/types";
 import { displayAgentName } from "@/lib/agentDirectory";
 
-/** Cache of agentId → display name from on-chain registry. */
+/** Cache of agentId → display name from on-chain registry. Refreshes every 60s. */
 const agentNameCache = new Map<string, string>();
 let agentCacheLoaded = false;
+let agentCacheTimestamp = 0;
+const AGENT_CACHE_TTL_MS = 60_000;
 
 async function loadAgentNameCache(): Promise<void> {
-    if (agentCacheLoaded) return;
+    const now = Date.now();
+    if (agentCacheLoaded && now - agentCacheTimestamp < AGENT_CACHE_TTL_MS) return;
     agentCacheLoaded = true;
+    agentCacheTimestamp = now;
     try {
         if (!CONTRACT_ADDRESSES.agentRegistry) return;
         const provider = getProvider();

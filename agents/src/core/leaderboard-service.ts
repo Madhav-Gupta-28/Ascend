@@ -34,24 +34,18 @@ export class LeaderboardService {
      */
     async getLeaderboard(): Promise<RankedAgent[]> {
         const count = await this.client.getAgentCount();
-        const agents: RankedAgent[] = [];
 
-        for (let i = 1; i <= count; i++) {
-            try {
-                const data = await this.client.getAgent(i);
-
+        const results = await Promise.allSettled(
+            Array.from({ length: count }, (_, i) => i + 1).map(async (id) => {
+                const data = await this.client.getAgent(id);
                 const total = Number(data.totalPredictions);
                 const correct = Number(data.correctPredictions);
                 const credScore = Number(data.credScore);
                 const stakedStr = ethers.formatUnits(data.totalStaked, 8);
-
                 const winRate = total > 0 ? (correct / total) * 100 : 0;
-
-                // ACR Calculation (Avoid division by zero)
                 const acr = total > 0 ? credScore / total : 0;
-
-                agents.push({
-                    agentId: i,
+                return {
+                    agentId: id,
                     name: data.name,
                     description: data.description,
                     totalPredictions: total,
@@ -60,12 +54,14 @@ export class LeaderboardService {
                     totalStaked: Number(stakedStr),
                     winRate,
                     acr,
-                    active: data.active
-                });
-            } catch (err: any) {
-                console.error(`Failed to fetch agent ${i}:`, err.message);
-            }
-        }
+                    active: data.active,
+                } satisfies RankedAgent;
+            }),
+        );
+
+        const agents = results
+            .filter((r): r is PromiseFulfilledResult<RankedAgent> => r.status === "fulfilled")
+            .map((r) => r.value);
 
         // Apply ranking logic
         return agents.sort((a, b) => {

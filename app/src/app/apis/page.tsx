@@ -46,7 +46,7 @@ export default function ApisPage() {
     };
 
     fetchData();
-    const id = setInterval(fetchData, 10000);
+    const id = setInterval(fetchData, 30000);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -110,7 +110,7 @@ export default function ApisPage() {
             <h2 className="text-lg font-semibold text-foreground">Live Top Agents Widget</h2>
             <p className="text-xs md:text-sm text-muted-foreground">
               This widget polls <span className="font-mono">/api/protocol/top-agents</span> every
-              10 seconds and renders the raw JSON.
+              30 seconds and renders the raw JSON.
             </p>
           </div>
           <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
