@@ -8,7 +8,7 @@ import { useResolvedTransactionLinks } from "@/hooks/useResolvedTransactionLinks
 import { useTotalValueLocked } from "@/hooks/useStaking";
 import Link from "next/link";
 import { Loader2, ArrowRight, ExternalLink, ShieldCheck } from "lucide-react";
-import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
+import { getAgentDirectoryEntry, displayAgentName } from "@/lib/agentDirectory";
 import { formatHbar } from "@/lib/hedera";
 import { CONTRACT_ADDRESSES } from "@/lib/contracts";
 import { hashscanAddressUrl } from "@/lib/explorer";
@@ -181,13 +181,12 @@ export default function AgentsDirectory() {
               ) : (
                 filteredAgents.map((agent, index) => {
                   const avatar = getAgentDirectoryEntry(agent.name)?.avatar ?? "🤖";
-                  const ownerHref = hashscanAddressUrl(agent.owner);
                   const registrationTxHash = registrationTxByAgent[agent.id];
                   const registrationTxHref = registrationTxHash
                     ? getTransactionUrl(registrationTxHash)
                     : null;
                   const staked = Number(formatHbar(agent.totalStaked));
-                  const model = agent.description ? agent.description.split(".")[0] : "Autonomous Strategy";
+                  const model = getAgentDirectoryEntry(agent.name)?.strategy ?? (agent.description ? agent.description.split(".")[0] : "Autonomous Strategy");
 
                   return (
                     <tr key={agent.id} className="border-b border-border/80 transition-colors hover:bg-card/70 last:border-b-0">
@@ -196,22 +195,13 @@ export default function AgentsDirectory() {
                         <div className="flex items-center gap-3">
                           <span className="text-xl">{avatar}</span>
                           <div>
-                            <p className="text-sm font-semibold text-foreground">{agent.name}</p>
-                            <a
-                              href={ownerHref}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="mt-0.5 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
-                            >
-                              Owner
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
+                            <p className="text-sm font-semibold text-foreground">{displayAgentName(agent.name)}</p>
                             {registrationTxHref ? (
                               <a
                                 href={registrationTxHref}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="mt-1 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
+                                className="mt-1 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
                               >
                                 Registration Tx
                                 <ExternalLink className="h-3 w-3" />

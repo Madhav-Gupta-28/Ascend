@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { X, Loader2 } from "lucide-react";
 import { useAgents } from "@/hooks/useAgents";
-import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
+import { getAgentDirectoryEntry, displayAgentName } from "@/lib/agentDirectory";
 import { CONTRACT_ADDRESSES, STAKING_VAULT_ABI } from "@/lib/contracts";
 import { useHederaWallet } from "@/hooks/use-hedera-wallet";
 import { toast } from "sonner";
@@ -107,7 +107,7 @@ export default function StakingForm({ agentId, onClose }: StakingFormProps) {
               {agents.map(a => {
                 const meta = getAgentDirectoryEntry(a.name);
                 return (
-                  <option key={a.id} value={a.id}>{meta?.avatar || "🤖"} {a.name} — CredScore {a.credScore >= 0 ? "+" : ""}{a.credScore}</option>
+                  <option key={a.id} value={a.id}>{meta?.avatar || "🤖"} {displayAgentName(a.name)} — CredScore {a.credScore >= 0 ? "+" : ""}{a.credScore}</option>
                 );
               })}
             </select>
@@ -117,7 +117,7 @@ export default function StakingForm({ agentId, onClose }: StakingFormProps) {
             <div className="rounded-lg border border-border bg-muted/50 p-3">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-lg">{avatar}</span>
-                <span className="font-semibold text-foreground">{agent.name}</span>
+                <span className="font-semibold text-foreground">{displayAgentName(agent.name)}</span>
               </div>
               <div className="flex gap-4 text-xs text-muted-foreground">
                 <span>Accuracy: <span className="text-foreground">{agent.accuracy.toFixed(1)}%</span></span>

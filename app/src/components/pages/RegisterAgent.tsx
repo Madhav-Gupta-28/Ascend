@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, CheckCircle2, CircleHelp, ExternalLink, Loader2, X } from "lucide-react";
 import { CONTRACT_ADDRESSES, AGENT_REGISTRY_ABI } from "@/lib/contracts";
@@ -84,10 +85,8 @@ function extractTransactionId(result: unknown): string | null {
 type DeploymentProof = {
   contractTxId: string | null;
   contractTxUrl: string | null;
-  holTxId: string | null;
-  holTxUrl: string | null;
-  holProfileUrl: string | null;
-  inboundTopicId: string | null;
+  agentId: number | null;
+  agentPageUrl: string | null;
 };
 
 export default function RegisterAgent() {
@@ -95,7 +94,7 @@ export default function RegisterAgent() {
   const [description, setDescription] = useState("");
   const [selectedStrategy, setSelectedStrategy] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [deployStep, setDeployStep] = useState<"idle" | "evm" | "hcs" | "done">("idle");
+  const [deployStep, setDeployStep] = useState<"idle" | "evm" | "done">("idle");
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [bondTinybars, setBondTinybars] = useState<bigint>(parseHbar("1"));
   const [deploymentProof, setDeploymentProof] = useState<DeploymentProof | null>(null);
@@ -168,13 +167,23 @@ export default function RegisterAgent() {
       );
       const contractTxId = extractTransactionId(registerResult);
       const contractTxUrl = contractTxId ? hashscanTxUrl(contractTxId) : null;
+      let onChainAgentId: number | null = null;
+      try {
+        const provider = getProvider();
+        const registry = new ethers.Contract(
+          CONTRACT_ADDRESSES.agentRegistry,
+          AGENT_REGISTRY_ABI,
+          provider,
+        );
+        onChainAgentId = Number(await registry.getAgentCount());
+      } catch {
+        onChainAgentId = null;
+      }
       setDeploymentProof({
         contractTxId,
         contractTxUrl,
-        holTxId: null,
-        holTxUrl: null,
-        holProfileUrl: null,
-        inboundTopicId: null,
+        agentId: onChainAgentId,
+        agentPageUrl: onChainAgentId ? `/agent/${onChainAgentId}` : null,
       });
 
       await Promise.all([
@@ -182,68 +191,6 @@ export default function RegisterAgent() {
         queryClient.invalidateQueries({ queryKey: ["currentRound"] }),
       ]);
       toast.success(`Agent ${name} registered on-chain.`, { id: "register-tx" });
-
-      setDeployStep("hcs");
-      try {
-        let onChainAgentId = -1;
-        try {
-          const provider = getProvider();
-          const registry = new ethers.Contract(
-            CONTRACT_ADDRESSES.agentRegistry,
-            AGENT_REGISTRY_ABI,
-            provider,
-          );
-          onChainAgentId = Number(await registry.getAgentCount());
-        } catch {
-          // Non-critical.
-        }
-
-        const holRes = await fetch("/api/agents/register-hol", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            agentName: name,
-            agentDescription: description,
-            onChainAgentId,
-          }),
-        });
-        const holData = await holRes.json();
-
-        if (holData.success) {
-          toast.success(`HOL registration complete (${holData.inboundTopicId}).`, {
-            id: "hol-register",
-            duration: 6000,
-          });
-          setDeploymentProof((prev) => ({
-            contractTxId: prev?.contractTxId ?? null,
-            contractTxUrl: prev?.contractTxUrl ?? null,
-            holTxId:
-              (typeof holData.guardedRegistryTxId === "string" ? holData.guardedRegistryTxId : null) ??
-              prev?.holTxId ??
-              null,
-            holTxUrl:
-              (typeof holData.guardedRegistryTxHashscanUrl === "string"
-                ? holData.guardedRegistryTxHashscanUrl
-                : null) ??
-              prev?.holTxUrl ??
-              null,
-            holProfileUrl:
-              (typeof holData.profileUrl === "string" ? holData.profileUrl : null) ??
-              prev?.holProfileUrl ??
-              null,
-            inboundTopicId:
-              (typeof holData.inboundTopicId === "string" ? holData.inboundTopicId : null) ??
-              prev?.inboundTopicId ??
-              null,
-          }));
-        } else {
-          toast.warning(`HOL registration deferred: ${holData.error || "unknown"}`, {
-            id: "hol-register",
-          });
-        }
-      } catch (holErr: any) {
-        console.warn("HOL registration failed (non-blocking):", holErr);
-      }
 
       setDeployStep("done");
       setTimeout(() => {
@@ -278,7 +225,7 @@ export default function RegisterAgent() {
               Launch Intelligence Agent
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Register once to go on-chain, become HOL-discoverable, and enter live prediction rounds.
+              Register once on-chain and enter live prediction rounds immediately.
             </p>
           </div>
 
@@ -389,41 +336,23 @@ export default function RegisterAgent() {
                     )}
                   </div>
 
-                  <div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                      HOL Registration TX
-                    </p>
-                    {deploymentProof.holTxUrl ? (
-                      <a
-                        href={deploymentProof.holTxUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] text-secondary hover:text-secondary/85"
-                      >
-                        {deploymentProof.holTxId}
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    ) : (
-                      <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-                        Pending or not returned by HOL broker
-                      </p>
-                    )}
-                  </div>
-
-                  {deploymentProof.holProfileUrl ? (
+                  {deploymentProof.agentId ? (
                     <div>
                       <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                        HOL Profile
+                        On-chain Agent ID
                       </p>
-                      <a
-                        href={deploymentProof.holProfileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] text-secondary hover:text-secondary/85"
-                      >
-                        Open profile
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-[11px] text-foreground">#{deploymentProof.agentId}</span>
+                        {deploymentProof.agentPageUrl ? (
+                          <Link
+                            href={deploymentProof.agentPageUrl}
+                            className="inline-flex items-center gap-1 font-mono text-[11px] text-secondary hover:text-secondary/85"
+                          >
+                            Open agent page
+                            <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        ) : null}
+                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -472,7 +401,7 @@ export default function RegisterAgent() {
             <div className="rounded-sm border border-border bg-card px-3 py-2.5">
               <p className="terminal-heading">Post-Registration Routing</p>
               <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                HOL registration and inbound topic generated after on-chain success
+                Agent is immediately visible in on-chain registry and eligible for rounds
               </p>
             </div>
           </div>
@@ -515,7 +444,7 @@ export default function RegisterAgent() {
                   Registration creates your agent in the on-chain `AgentRegistry` with a refundable bond.
                 </p>
                 <p>
-                  After on-chain success, Ascend attempts HOL registration so your agent becomes discoverable and reachable over HCS-10.
+                  After on-chain success, your agent appears in the directory, can be selected for rounds, and accumulates CredScore from verifiable outcomes.
                 </p>
                 <p>
                   Once active, your agent can be selected into prediction rounds, build CredScore, and attract user staking.
@@ -525,7 +454,7 @@ export default function RegisterAgent() {
               <div className="mt-5 rounded-sm border border-border bg-card px-3 py-2.5">
                 <p className="terminal-heading">You Can Do Next</p>
                 <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                  Open Agents page • verify HOL status • monitor rounds • receive stake backing
+                  Open Agents page • verify on-chain status • monitor rounds • receive stake backing
                 </p>
               </div>
             </motion.div>
@@ -559,15 +488,13 @@ export default function RegisterAgent() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {deployStep === "hcs" ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-secondary" />
-                  ) : deployStep === "done" ? (
+                  {deployStep === "done" ? (
                     <CheckCircle2 className="h-3.5 w-3.5 text-secondary" />
                   ) : (
                     <span className="h-3.5 w-3.5 rounded-full border border-border" />
                   )}
-                  <span className={deployStep === "idle" || deployStep === "evm" ? "text-muted-foreground" : "text-foreground"}>
-                    HOL registration
+                  <span className={deployStep === "idle" ? "text-muted-foreground" : "text-foreground"}>
+                    Agent indexed
                   </span>
                 </div>
 

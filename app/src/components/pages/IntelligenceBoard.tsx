@@ -36,17 +36,34 @@ export default function IntelligenceBoard() {
   }, [agents, round, tvl]);
 
   return (
-    <div className="space-y-10 pb-14 md:space-y-14 md:pb-16">
+    <div className="space-y-8 pb-14 md:space-y-10 md:pb-16">
       <ProtocolHero />
 
-      <div className="pt-6 md:pt-8">
-        <SystemMetrics
-          agentsActive={metrics.agentsActive}
-          predictionsLogged={metrics.predictionsLogged}
-          roundsCompleted={metrics.roundsCompleted}
-          totalHbarStaked={metrics.totalHbarStaked}
-        />
-      </div>
+      <SystemMetrics
+        agentsActive={metrics.agentsActive}
+        predictionsLogged={metrics.predictionsLogged}
+        roundsCompleted={metrics.roundsCompleted}
+        totalHbarStaked={metrics.totalHbarStaked}
+      />
+
+      {/* How it works — quick scannable strip */}
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        {[
+          { step: "01", label: "Agents Commit", desc: "AI agents analyze HBAR/USD and lock a keccak256 prediction hash on-chain." },
+          { step: "02", label: "Reasoning on HCS", desc: "Full analysis published to Hedera Consensus Service — immutable and timestamped." },
+          { step: "03", label: "Resolve & Rank", desc: "Outcome settles. CredScores update. Stakers of winning agents earn rewards." },
+        ].map((item) => (
+          <div key={item.step} className="terminal-surface flex items-start gap-3.5 px-4 py-4 md:px-5 md:py-5">
+            <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm border border-secondary/40 bg-secondary/10 font-mono text-[10px] font-bold text-secondary">
+              {item.step}
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-foreground">{item.label}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.desc}</p>
+            </div>
+          </div>
+        ))}
+      </section>
 
       <MarketPanel
         round={round}

@@ -1,7 +1,7 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { TimelineEvent } from "@/lib/types";
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Brain } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useResolvedTransactionLinks } from "@/hooks/useResolvedTransactionLinks";
 import { hashscanTopicUrl } from "@/lib/explorer";
@@ -60,22 +60,44 @@ function tone(message: string): string {
 function eventTag(type: TimelineEvent["eventType"]): string {
   switch (type) {
     case "ROUND_CREATED":
+    case "COMMIT_PHASE_STARTED":
       return "ROUND";
     case "ROUND_RESOLVED":
       return "RESOLVE";
     case "PREDICTION_COMMITTED":
       return "COMMIT";
     case "PREDICTION_REVEALED":
+    case "REVEAL_PHASE_STARTED":
       return "REVEAL";
     case "STAKE_ADDED":
       return "STAKE";
     case "AGENT_REASONING_PUBLISHED":
-      return "REASON";
+    case "AGENT_ANALYSIS_STARTED":
+      return "HCS";
     case "LEADERBOARD_CHANGED":
       return "SCORE";
     default:
       return "SYSTEM";
   }
+}
+
+function tagColor(tag: string): string {
+  switch (tag) {
+    case "HCS":
+      return "border-blue-500/50 bg-blue-500/15 text-blue-400";
+    case "RESOLVE":
+      return "border-amber-500/50 bg-amber-500/15 text-amber-400";
+    case "SCORE":
+      return "border-purple-500/50 bg-purple-500/15 text-purple-400";
+    case "ROUND":
+      return "border-secondary/50 bg-secondary/15 text-secondary";
+    default:
+      return "border-border bg-card text-muted-foreground";
+  }
+}
+
+function isReasoningEvent(type: TimelineEvent["eventType"]): boolean {
+  return type === "AGENT_REASONING_PUBLISHED" || type === "AGENT_ANALYSIS_STARTED";
 }
 
 function highlightAgentMessage(message: string, agentName?: string): React.ReactNode {
@@ -145,8 +167,8 @@ export default function ActivityFeed({ events }: ActivityFeedProps) {
     <section className="terminal-surface px-5 py-5 md:px-6 md:py-6">
       <div className="flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="section-kicker">Realtime Stream</p>
-          <p className="section-title mt-1">Protocol Activity</p>
+          <p className="section-kicker">Hedera Consensus Service</p>
+          <p className="section-title mt-1">On-Chain Activity Stream</p>
         </div>
         <div className="flex items-center gap-3">
           <span
@@ -177,6 +199,8 @@ export default function ActivityFeed({ events }: ActivityFeedProps) {
           <div className="px-3 py-2 md:px-4">
             {rows.map((event, index) => {
               const tag = eventTag(event.eventType);
+              const colorCls = tagColor(tag);
+              const isReasoning = isReasoningEvent(event.eventType);
               const proofMeta = event.transactionHash
                 ? {
                     href: getTransactionUrl(event.transactionHash),
@@ -185,35 +209,45 @@ export default function ActivityFeed({ events }: ActivityFeedProps) {
                 : event.topicId
                   ? {
                       href: hashscanTopicUrl(event.topicId),
-                      label: "Topic" as const,
+                      label: "HCS" as const,
                     }
                   : null;
               return (
                 <div
                   key={`${event.id}-${index}`}
-                  className="grid grid-cols-[84px_64px_1fr_auto] items-start gap-2 border-b border-border/80 py-2.5 last:border-b-0"
+                  className={`border-b border-border/80 py-2.5 last:border-b-0 ${isReasoning ? "rounded-sm bg-blue-500/[0.04]" : ""}`}
                 >
-                  <p className="font-mono text-[11px] text-muted-foreground">{formatTs(event.timestamp)}</p>
-                  <span className="inline-flex h-5 items-center justify-center rounded-sm border border-border bg-card px-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
-                    {tag}
-                  </span>
-                  <p className={`font-mono text-[12px] leading-5 ${tone(event.message)}`}>
-                    {highlightAgentMessage(event.message, event.agentName)}
-                  </p>
-                  {proofMeta?.href ? (
-                    <a
-                      href={proofMeta.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
-                    >
-                      {proofMeta.label}
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  ) : (
-                    <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                      —
+                  <div className="grid grid-cols-[84px_56px_1fr_auto] items-start gap-2">
+                    <p className="font-mono text-[11px] text-muted-foreground">{formatTs(event.timestamp)}</p>
+                    <span className={`inline-flex h-5 items-center justify-center rounded-sm border px-1.5 font-mono text-[9px] uppercase tracking-[0.12em] ${colorCls}`}>
+                      {tag}
                     </span>
+                    <p className={`font-mono text-[12px] leading-5 ${tone(event.message)}`}>
+                      {isReasoning && <Brain className="mr-1.5 inline-block h-3 w-3 text-blue-400" />}
+                      {highlightAgentMessage(event.message, event.agentName)}
+                    </p>
+                    {proofMeta?.href ? (
+                      <a
+                        href={proofMeta.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
+                      >
+                        {proofMeta.label}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : (
+                      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                        —
+                      </span>
+                    )}
+                  </div>
+                  {isReasoning && event.detail && (
+                    <div className="ml-[140px] mt-1">
+                      <span className="font-mono text-[10px] text-blue-400/70">
+                        confidence: {event.detail}
+                      </span>
+                    </div>
                   )}
                 </div>
               );

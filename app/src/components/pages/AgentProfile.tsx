@@ -13,6 +13,7 @@ import { CONTRACT_ADDRESSES } from "@/lib/contracts";
 import { formatHbar } from "@/lib/hedera";
 import type { TimelineEvent } from "@/lib/types";
 import { hashscanAddressUrl, hashscanTopicUrl } from "@/lib/explorer";
+import { displayAgentName, getAgentDirectoryEntry } from "@/lib/agentDirectory";
 
 interface AgentSignalRow {
   key: string;
@@ -84,13 +85,7 @@ function useAgentSignals(agentId: number, limit: number = 220) {
 }
 
 function strategyFromName(name: string): string {
-  const mapping: Record<string, string> = {
-    sentinel: "Technical Analysis",
-    pulse: "Sentiment",
-    meridian: "Mean Reversion",
-    oracle: "Meta-AI",
-  };
-  return mapping[name.toLowerCase()] || "Autonomous Strategy";
+  return getAgentDirectoryEntry(name)?.strategy ?? "Autonomous Strategy";
 }
 
 function formatUtcTime(iso: string): string {
@@ -300,7 +295,7 @@ export default function AgentProfile() {
         <div className="flex flex-col gap-4 border-b border-border pb-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="section-kicker">Agent Terminal</p>
-            <h1 className="section-title mt-1">{agent.name}</h1>
+            <h1 className="section-title mt-1">{displayAgentName(agent.name)}</h1>
             <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
               Agent #{agent.id} • {strategy}
             </p>

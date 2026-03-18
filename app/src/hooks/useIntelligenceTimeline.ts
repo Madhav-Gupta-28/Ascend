@@ -2,23 +2,45 @@ import { useQuery } from "@tanstack/react-query";
 import { ethers } from "ethers";
 import { fetchTopicMessages, decodeBase64Json, consensusTimestampToIso } from "@/lib/hedera";
 import { getProvider } from "@/lib/hedera";
-import { CONTRACT_ADDRESSES, PREDICTION_MARKET_ABI, TOPIC_IDS } from "@/lib/contracts";
+import { CONTRACT_ADDRESSES, AGENT_REGISTRY_ABI, PREDICTION_MARKET_ABI, TOPIC_IDS } from "@/lib/contracts";
 import type { TimelineEvent, TimelineEventType } from "@/lib/types";
+import { displayAgentName } from "@/lib/agentDirectory";
 
-const AGENT_NAMES: Record<string, string> = {
-    "1": "Sentinel",
-    "2": "Pulse",
-    "3": "Meridian",
-    "4": "Oracle",
-    sentinel: "Sentinel",
-    pulse: "Pulse",
-    meridian: "Meridian",
-    oracle: "Oracle",
-};
+/** Cache of agentId → display name from on-chain registry. */
+const agentNameCache = new Map<string, string>();
+let agentCacheLoaded = false;
+
+async function loadAgentNameCache(): Promise<void> {
+    if (agentCacheLoaded) return;
+    agentCacheLoaded = true;
+    try {
+        if (!CONTRACT_ADDRESSES.agentRegistry) return;
+        const provider = getProvider();
+        const registry = new ethers.Contract(CONTRACT_ADDRESSES.agentRegistry, AGENT_REGISTRY_ABI, provider);
+        const count = Number(await registry.getAgentCount());
+        const promises = [];
+        for (let i = 1; i <= count; i++) {
+            promises.push(
+                registry.getAgent(i).then((agent: any) => {
+                    const rawName = agent.name || agent[1] || "";
+                    agentNameCache.set(String(i), displayAgentName(rawName));
+                }).catch(() => {})
+            );
+        }
+        await Promise.all(promises);
+    } catch {
+        // Silently fail — fallback to ID display
+    }
+}
 
 function agentDisplayName(agentId: string): string {
-    const key = String(agentId || "").trim().toLowerCase();
-    return AGENT_NAMES[key] || (key ? key.charAt(0).toUpperCase() + key.slice(1) : "Agent");
+    const key = String(agentId || "").trim();
+    const cached = agentNameCache.get(key);
+    if (cached) return cached;
+    // Fallback: try displayAgentName in case it's a raw name string
+    const cleaned = displayAgentName(key);
+    if (cleaned !== key) return cleaned;
+    return key ? `Agent #${key}` : "Agent";
 }
 
 export interface TimelineFilters {
@@ -170,6 +192,7 @@ async function fetchContractTimelineEvents(limit: number): Promise<TimelineEvent
 }
 
 async function fetchTimelineEvents(limit: number): Promise<TimelineEvent[]> {
+    await loadAgentNameCache();
     const predictionsTopicId = TOPIC_IDS.predictions || TOPIC_IDS.legacyRounds;
     const resultsTopicId = TOPIC_IDS.results || TOPIC_IDS.legacyRounds;
     const topics = [

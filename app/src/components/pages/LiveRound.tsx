@@ -9,7 +9,7 @@ import { useAgents } from "@/hooks/useAgents";
 import { useIntelligenceTimeline } from "@/hooks/useIntelligenceTimeline";
 import { useResolvedTransactionLinks } from "@/hooks/useResolvedTransactionLinks";
 import type { Agent, Commitment, Round, TimelineEvent } from "@/lib/types";
-import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
+import { getAgentDirectoryEntry, displayAgentName } from "@/lib/agentDirectory";
 import { hashscanTopicUrl } from "@/lib/explorer";
 
 interface LiveRoundProps {
@@ -337,10 +337,16 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
             const avatar = getAgentDirectoryEntry(agent.name)?.avatar ?? "🤖";
             const cardTone =
               isCorrect === true
-                ? "border-secondary/40 bg-secondary/5"
+                ? "border-secondary/50 bg-secondary/8 shadow-[0_0_12px_rgba(72,223,123,0.08)]"
                 : isCorrect === false
-                  ? "border-destructive/40 bg-destructive/5"
+                  ? "border-destructive/50 bg-destructive/8 shadow-[0_0_12px_rgba(239,68,68,0.08)]"
                   : "border-border bg-card";
+            const resultBadge =
+              isCorrect === true
+                ? { label: "CORRECT", cls: "border-secondary/50 bg-secondary/15 text-secondary" }
+                : isCorrect === false
+                  ? { label: "WRONG", cls: "border-destructive/50 bg-destructive/15 text-destructive" }
+                  : null;
 
             return (
               <div key={agent.id} className={`rounded-sm border p-4 ${cardTone}`}>
@@ -348,23 +354,30 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{avatar}</span>
                     <div>
-                      <p className="text-sm font-semibold text-foreground">{agent.name}</p>
+                      <p className="text-sm font-semibold text-foreground">{displayAgentName(agent.name)}</p>
                       <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                         Agent #{agent.id}
                       </p>
                     </div>
                   </div>
-                  {proof?.href ? (
-                    <a
-                      href={proof.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
-                    >
-                      {proof.label}
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  ) : null}
+                  <div className="flex items-center gap-2">
+                    {resultBadge ? (
+                      <span className={`rounded-sm border px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] ${resultBadge.cls}`}>
+                        {resultBadge.label}
+                      </span>
+                    ) : null}
+                    {proof?.href ? (
+                      <a
+                        href={proof.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
+                      >
+                        {proof.label}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 border-t border-border/80 pt-3">

@@ -2,15 +2,13 @@ import { Agent } from "@/lib/types";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { TrendingUp, Users } from "lucide-react";
-import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
+import { getAgentDirectoryEntry, displayAgentName } from "@/lib/agentDirectory";
 
 const strategyColors: Record<string, string> = {
   "Technical Analysis": "bg-primary/15 text-primary border-primary/20",
-  "Sentiment": "bg-pink-500/15 text-pink-400 border-pink-500/20",
+  "Sentiment & Momentum": "bg-pink-500/15 text-pink-400 border-pink-500/20",
   "Mean Reversion": "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  "Meta-AI": "bg-secondary/15 text-secondary border-secondary/20",
-  "Momentum": "bg-blue-500/15 text-blue-400 border-blue-500/20",
-  "On-Chain": "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+  "Meta-Analysis": "bg-secondary/15 text-secondary border-secondary/20",
 };
 
 import { formatHbar } from "@/lib/hedera";
@@ -20,16 +18,7 @@ export default function AgentCard({ agent, index }: { agent: Agent; index: numbe
   const directoryMetadata = getAgentDirectoryEntry(agent.name);
   const avatar = directoryMetadata?.avatar || "🤖";
 
-  // Mapping the directory agent id to its strategy, or fallback to the agent description
-  // Typically, name maps closely to strategy in the architecture.
-  const nameToStrategy: Record<string, string> = {
-    "sentinel": "Technical Analysis",
-    "pulse": "Sentiment",
-    "meridian": "Mean Reversion",
-    "oracle": "Meta-AI"
-  };
-
-  const strategy = nameToStrategy[agent.name.toLowerCase()] || "AI Strategy";
+  const strategy = directoryMetadata?.strategy || "AI Strategy";
 
   const totalStakedHbar = Number(formatHbar(agent.totalStaked));
 
@@ -59,7 +48,7 @@ export default function AgentCard({ agent, index }: { agent: Agent; index: numbe
           <span className="text-2xl">{avatar}</span>
           <div className="min-w-0">
             <div className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
-              {agent.name}
+              {displayAgentName(agent.name)}
             </div>
             <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium ${strategyColors[strategy] || "bg-muted text-muted-foreground"}`}>
               {strategy}

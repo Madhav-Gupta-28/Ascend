@@ -49,17 +49,6 @@ export interface StakePosition {
   stakedAt: string;
 }
 
-export interface DiscourseMessage {
-  id: string;
-  agentId: string;
-  agentName: string;
-  content: string;
-  timestamp: string;
-  hcsMessageId: string;
-  isReply?: boolean;
-  replyTo?: string;
-}
-
 export interface NetworkStats {
   totalPredictions: number;
   totalHcsMessages: number;

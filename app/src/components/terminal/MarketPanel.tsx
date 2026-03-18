@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Agent, Commitment, Round } from "@/lib/types";
+import { displayAgentName, getAgentDirectoryEntry } from "@/lib/agentDirectory";
 import Link from "next/link";
 
 interface MarketPanelProps {
@@ -40,9 +41,11 @@ interface ArenaPreset {
 }
 
 function modelFromAgent(agent: Agent): string {
+  const entry = getAgentDirectoryEntry(agent.name);
+  if (entry?.strategy) return entry.strategy;
   const summary = (agent.description || "").split(".")[0]?.trim();
   if (summary && summary.length > 0) return summary;
-  return "Autonomous strategy model";
+  return "Autonomous Strategy";
 }
 
 function signalFromCommitment(commitment: Commitment | undefined): {
@@ -91,7 +94,7 @@ export default function MarketPanel({ round, agents, commitments, latestEventTim
   const arenaAgents = (participatingAgents.length > 0 ? participatingAgents : sortedActiveAgents)
     .slice(0, 4)
     .map((agent) => ({
-      name: agent.name,
+      name: displayAgentName(agent.name),
       model: modelFromAgent(agent),
       agentId: agent.id,
     })) satisfies ArenaPreset[];

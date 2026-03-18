@@ -461,7 +461,16 @@ export class RoundOrchestrator {
             console.log("   No reward pool funds available for this round.");
         } else {
             // Pull funds from PredictionMarket so distribution is sourced from round fees.
-            await this.contracts.withdrawRewardPool(roundId, rewardPoolBefore);
+            const withdrew = await this.withdrawRewardPoolWithRetry(roundId, rewardPoolBefore);
+            if (!withdrew) {
+                console.warn(
+                    "   ⚠️ Failed to withdraw reward pool after retries; skipping reward distribution for this round",
+                );
+                console.log("\n══════════════════════════════════════");
+                console.log(`  ROUND #${roundId} COMPLETE — Outcome: ${outcome} (rewards skipped)`);
+                console.log("══════════════════════════════════════");
+                return { roundId, predictions: revealedPredictions, startPrice, endPrice, outcome };
+            }
             console.log(
                 `   Withdrew ${this.formatTinybarAsHbar(rewardPoolBefore)} from PredictionMarket.rewardPool`,
             );
@@ -945,7 +954,13 @@ export class RoundOrchestrator {
         const treasuryAddress = process.env.ASCEND_TREASURY_ADDRESS?.trim();
 
         if (rewardPoolBefore > 0n && participantCount > 0) {
-            await this.contracts.withdrawRewardPool(roundId, rewardPoolBefore);
+            const withdrew = await this.withdrawRewardPoolWithRetry(roundId, rewardPoolBefore);
+            if (!withdrew) {
+                console.warn(
+                    "   ⚠️ Failed to withdraw reward pool after retries; skipping reward distribution for this round",
+                );
+                return { roundId, predictions: revealedPredictions, startPrice, endPrice, outcome };
+            }
             console.log(
                 `   Withdrew ${this.formatTinybarAsHbar(rewardPoolBefore)} from PredictionMarket.rewardPool`,
             );
@@ -1103,6 +1118,38 @@ export class RoundOrchestrator {
                 await this.sleep(1500 * attempt);
             }
         }
+    }
+
+    private async withdrawRewardPoolWithRetry(roundId: number, amount: bigint): Promise<boolean> {
+        const maxAttempts = 4;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                await this.contracts.withdrawRewardPool(roundId, amount);
+                return true;
+            } catch (error: any) {
+                const message = String(error?.message || error || "").toLowerCase();
+                if (
+                    message.includes("nothing to withdraw") ||
+                    message.includes("already withdrawn") ||
+                    (message.includes("reward pool") && message.includes("zero"))
+                ) {
+                    return false;
+                }
+
+                if (attempt === maxAttempts) {
+                    console.warn(
+                        `   ⚠️ Reward-pool withdraw failed after ${maxAttempts} attempts (${error?.message || String(error)})`,
+                    );
+                    return false;
+                }
+
+                console.warn(
+                    `   ⚠️ Reward-pool withdraw attempt ${attempt}/${maxAttempts} failed; retrying... (${error?.message || String(error)})`,
+                );
+                await this.sleep(1200 * attempt);
+            }
+        }
+        return false;
     }
 
     private async resolveRoundWithoutParticipants(

@@ -60,18 +60,39 @@ export default function RoundsHistory() {
 
   const winnersByRoundId = useMemo(() => {
     const map = new Map<number, Set<string>>();
+
+    // Method 1: Use LEADERBOARD_CHANGED events with positive deltas
     for (const event of timelineEvents) {
-      if (event.eventType !== "LEADERBOARD_CHANGED" || event.roundId == null || !event.agentName) {
-        continue;
-      }
+      if (event.eventType !== "LEADERBOARD_CHANGED" || event.roundId == null || !event.agentName) continue;
       const detail = String(event.detail ?? "");
-      const isWinner = detail.startsWith("+") || /\+\d/.test(event.message);
+      const isWinner = detail.startsWith("+") && detail !== "+0";
       if (!isWinner) continue;
       if (!map.has(event.roundId)) map.set(event.roundId, new Set<string>());
       map.get(event.roundId)!.add(event.agentName);
     }
+
+    // Method 2: Cross-reference revealed predictions with round outcomes
+    if (rounds.length > 0) {
+      const outcomeByRoundId = new Map<number, number>();
+      for (const round of rounds) {
+        if (round.status === 2) outcomeByRoundId.set(round.id, round.outcome);
+      }
+      for (const event of timelineEvents) {
+        if (event.eventType !== "PREDICTION_REVEALED" || event.roundId == null || !event.agentName) continue;
+        const outcome = outcomeByRoundId.get(event.roundId);
+        if (outcome == null) continue;
+        const detail = String(event.detail ?? "");
+        const predictedUp = detail.startsWith("UP");
+        const predictedDown = detail.startsWith("DOWN");
+        const correct = (outcome === 0 && predictedUp) || (outcome === 1 && predictedDown);
+        if (!correct) continue;
+        if (!map.has(event.roundId)) map.set(event.roundId, new Set<string>());
+        map.get(event.roundId)!.add(event.agentName);
+      }
+    }
+
     return map;
-  }, [timelineEvents]);
+  }, [timelineEvents, rounds]);
 
   if (isLoading) {
     return (

@@ -5,7 +5,7 @@ import { TrendingUp, Plus, ArrowDownToLine, Loader2, Users, Wallet, CheckCircle2
 import { useHederaWallet } from "@/hooks/use-hedera-wallet";
 import { useStakingPortfolio } from "@/hooks/useStaking";
 import { useAgents } from "@/hooks/useAgents";
-import { getAgentDirectoryEntry } from "@/lib/agentDirectory";
+import { getAgentDirectoryEntry, displayAgentName } from "@/lib/agentDirectory";
 import { CONTRACT_ADDRESSES, STAKING_VAULT_ABI } from "@/lib/contracts";
 import { formatHbar } from "@/lib/hedera";
 import { toast } from "sonner";
@@ -242,7 +242,7 @@ export default function StakingDashboard() {
                           </div>
                           <div>
                             <Link href={`/agent/${agentId}`} className="font-semibold text-foreground transition-colors group-hover:text-primary">
-                              {agent?.name || `Agent #${agentId}`}
+                              {agent ? displayAgentName(agent.name) : `Agent #${agentId}`}
                             </Link>
                             <div className="mt-0.5 text-[10px] text-muted-foreground">ID: #{agentId}</div>
                           </div>

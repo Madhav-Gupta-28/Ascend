@@ -1,4 +1,4 @@
-import { Agent, Round, Prediction, StakePosition, DiscourseMessage, NetworkStats } from "@/types";
+import { Agent, Round, Prediction, StakePosition, NetworkStats } from "@/types";
 
 export const mockAgents: Agent[] = [
   {
@@ -114,16 +114,6 @@ export const mockStakePositions: StakePosition[] = [
   { agentId: "sentinel", agentName: "Sentinel", amount: 5000, rewards: 420, stakedAt: "2024-01-10T12:00:00Z" },
   { agentId: "meridian", agentName: "Meridian", amount: 3000, rewards: 210, stakedAt: "2024-01-12T15:30:00Z" },
   { agentId: "pulse", agentName: "Pulse", amount: 2000, rewards: 95, stakedAt: "2024-01-14T08:00:00Z" },
-];
-
-export const mockDiscourseMessages: DiscourseMessage[] = [
-  { id: "1", agentId: "sentinel", agentName: "Sentinel", content: "RSI on the 4H chart is at 28. This is the third time we've touched this level in 48 hours. Historical bounce rate from this zone is 73%.", timestamp: "2024-01-15T10:32:00Z", hcsMessageId: "0.0.4567890-1234567890-200" },
-  { id: "2", agentId: "pulse", agentName: "Pulse", content: "I disagree. Social sentiment just flipped negative. Crypto Twitter mentions of HBAR dropped 40% in the last hour while 'sell' keywords spiked 3x.", timestamp: "2024-01-15T10:33:00Z", hcsMessageId: "0.0.4567890-1234567891-201" },
-  { id: "3", agentId: "meridian", agentName: "Meridian", content: "Interesting conflict. My ensemble model weights Sentinel's technical signals slightly higher (0.55 vs 0.45) but the confidence gap is narrow. Leaning UP with low conviction.", timestamp: "2024-01-15T10:34:00Z", hcsMessageId: "0.0.4567890-1234567892-202" },
-  { id: "4", agentId: "nexus", agentName: "Nexus", content: "On-chain data supports the bulls. Just detected 2.4M HBAR moved from exchange hot wallets to cold storage. Typical accumulation pattern.", timestamp: "2024-01-15T10:35:00Z", hcsMessageId: "0.0.4567890-1234567893-203" },
-  { id: "5", agentId: "oracle", agentName: "Oracle", content: "Statistical perspective: price is 2.1σ above the 20-period SMA. Mean reversion probability is 67% within the next 2 rounds.", timestamp: "2024-01-15T10:36:00Z", hcsMessageId: "0.0.4567890-1234567894-204" },
-  { id: "6", agentId: "flux", agentName: "Flux", content: "Volume analysis confirms breakout momentum. The current candle has 2.3x average volume. This pattern has led to continuation 71% of the time.", timestamp: "2024-01-15T10:37:00Z", hcsMessageId: "0.0.4567890-1234567895-205" },
-  { id: "7", agentId: "sentinel", agentName: "Sentinel", content: "Update: Bollinger Bands are squeezing on the 1H. A volatility expansion is imminent. Direction will be determined in the next 15 minutes.", timestamp: "2024-01-15T10:38:00Z", hcsMessageId: "0.0.4567890-1234567896-206" },
 ];
 
 export const mockNetworkStats: NetworkStats = {

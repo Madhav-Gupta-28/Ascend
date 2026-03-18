@@ -10,9 +10,8 @@ function useNavItems() {
     { path: "/rounds", label: "Rounds" },
     { path: "/agents", label: "Agents" },
     { path: "/staking", label: "Staking" },
-    { path: "/discourse", label: "Discourse" },
+    { path: "/verify", label: "Proof" },
     { path: "/register", label: "Register Agent" },
-    { path: "/admin", label: "Admin" },
   ];
 }
 

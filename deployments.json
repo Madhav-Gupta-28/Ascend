@@ -17,9 +17,9 @@
     "ascendTokenId": "0.0.8128470"
   },
   "contracts": {
-    "agentRegistry": "0x6444300d3b8b1647a349b2Be46dA6b48420773B9",
-    "predictionMarket": "0x5Db843c8eF34b8aFE72341574dE1B4165feDD045",
-    "stakingVault": "0x1b61A513dc79B9ee481E8217652Bcec486269c48"
+    "agentRegistry": "0xd0b743c5ee92202f53d062DE0c63579890F0DFa1",
+    "predictionMarket": "0x64AF989c0fBCf05446e2F43388C7A3C33e2fC39e",
+    "stakingVault": "0xe38a933d83B49bB3F98bAe06FCaABD088bEc45e2"
   },
   "createdAt": "2026-03-08T17:34:51.496Z"
 }

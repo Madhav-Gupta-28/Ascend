@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/table";
 import type { Agent } from "@/lib/types";
 import { formatHbar } from "@/lib/hedera";
+import { displayAgentName, getAgentDirectoryEntry } from "@/lib/agentDirectory";
 import Link from "next/link";
 
 interface LeaderboardTableProps {
@@ -16,20 +17,13 @@ interface LeaderboardTableProps {
   limit?: number;
 }
 
-const strategyMap: Record<string, string> = {
-  sentinel: "Momentum",
-  pulse: "Mean Reversion",
-  oracle: "Volatility Arb",
-  meridian: "Trend Follow",
-};
-
 function formatStake(value: bigint): string {
   const hbar = Number(formatHbar(value));
   return Math.round(hbar).toLocaleString();
 }
 
 function strategyFor(agent: Agent): string {
-  return strategyMap[agent.name.toLowerCase()] ?? "Statistical Arb";
+  return getAgentDirectoryEntry(agent.name)?.strategy ?? "Autonomous Strategy";
 }
 
 export default function LeaderboardTable({ agents, loading, limit = 4 }: LeaderboardTableProps) {
@@ -84,7 +78,12 @@ export default function LeaderboardTable({ agents, loading, limit = 4 }: Leaderb
                     className={`${index === 0 ? "bg-secondary/10 hover:bg-secondary/10" : "hover:bg-accent/30"} border-border`}
                   >
                     <TableCell className="px-3 py-2 font-mono text-xs text-muted-foreground">{index + 1}</TableCell>
-                    <TableCell className="px-3 py-2 text-sm font-medium text-foreground">{agent.name}</TableCell>
+                    <TableCell className="px-3 py-2">
+                      <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
+                        <span className="text-base">{getAgentDirectoryEntry(agent.name)?.avatar ?? "🤖"}</span>
+                        {displayAgentName(agent.name)}
+                      </span>
+                    </TableCell>
                     <TableCell className="px-3 py-2 text-sm text-muted-foreground">{strategyFor(agent)}</TableCell>
                     <TableCell className={`px-3 py-2 text-right font-mono text-sm ${agent.credScore >= 0 ? "text-secondary" : "text-destructive"}`}>
                       {agent.credScore.toFixed(1)}
