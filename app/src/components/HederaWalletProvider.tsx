@@ -4,33 +4,20 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { LedgerId, type Transaction, ContractExecuteTransaction, ContractId, Hbar } from "@hashgraph/sdk";
+import {
+  AccountId,
+  ContractExecuteTransaction,
+  ContractId,
+  Hbar,
+  LedgerId,
+  type Transaction,
+} from "@hashgraph/sdk";
 import { ethers } from "ethers";
-
-type HashConnectLike = {
-  connectionStatusChangeEvent: { on: (cb: (status: string) => void) => void };
-  pairingEvent: { on: (cb: (pairing: { accountIds: string[] }) => void) => void };
-  disconnectionEvent: { on: (cb: () => void) => void };
-  connectedAccountIds: Array<{ toString: () => string }>;
-  pairingString?: string;
-  init: () => Promise<void>;
-  openPairingModal: (
-    themeMode?: "dark" | "light",
-    backgroundColor?: string,
-    accentColor?: string,
-    accentFillColor?: string,
-    borderRadius?: string,
-  ) => Promise<void>;
-  disconnect: () => Promise<void>;
-  sendTransaction: (accountId: any, transaction: any) => Promise<unknown>;
-  signMessages: (accountId: any, message: string) => Promise<unknown>;
-};
 
 interface HederaWalletContextValue {
   isInitializing: boolean;
@@ -50,11 +37,35 @@ interface HederaWalletContextValue {
     abi: any,
     functionName: string,
     args: any[],
-    payableAmountTinybars?: string
+    payableAmountTinybars?: string,
   ) => Promise<unknown>;
 }
 
 const HederaWalletContext = createContext<HederaWalletContextValue | null>(null);
+
+type HashConnectInstance = {
+  connectionStatusChangeEvent: { on: (cb: (status: string) => void) => void };
+  pairingEvent: { on: (cb: (pairing: { accountIds: string[] }) => void) => void };
+  disconnectionEvent: { on: (cb: () => void) => void };
+  connectedAccountIds: Array<{ toString: () => string }>;
+  pairingString?: string;
+  init: () => Promise<void>;
+  openPairingModal: (
+    themeMode?: "dark" | "light",
+    backgroundColor?: string,
+    accentColor?: string,
+    accentFillColor?: string,
+    borderRadius?: string,
+  ) => Promise<void>;
+  disconnect: () => Promise<void>;
+  sendTransaction: (accountId: any, transaction: any) => Promise<unknown>;
+  signMessages: (accountId: any, message: string) => Promise<unknown>;
+};
+
+const CONNECTION_STATE = {
+  Disconnected: "Disconnected",
+  Connected: "Connected",
+} as const;
 
 function normalizeAccountId(accountId: string): string {
   const trimmed = accountId.trim();
@@ -65,9 +76,7 @@ function normalizeAccountId(accountId: string): string {
 
 function shortAccountId(accountId: string | null): string {
   if (!accountId) return "";
-  return accountId.length <= 10
-    ? accountId
-    : `${accountId.slice(0, 6)}…${accountId.slice(-3)}`;
+  return accountId.length <= 10 ? accountId : `${accountId.slice(0, 6)}…${accountId.slice(-3)}`;
 }
 
 function normalizeWalletError(err: unknown): Error {
@@ -75,216 +84,158 @@ function normalizeWalletError(err: unknown): Error {
   if (/proposal expired/i.test(message)) {
     return new Error("Wallet request expired. Reopen HashPack and try again.");
   }
+  if (/no internet connection detected/i.test(message)) {
+    return new Error("HashPack relay unavailable. Retry in a few seconds.");
+  }
+  if (/uri missing/i.test(message)) {
+    return new Error("Wallet pairing URI missing. Retry connect.");
+  }
+  if (/cannot redefine property:\s*ethereum/i.test(message) || /defineProperty.*ethereum/i.test(message)) {
+    return new Error("Wallet extension conflict detected. Disable other wallet extensions and retry.");
+  }
   if (/user rejected|rejected by user|cancelled by user/i.test(message)) {
     return new Error("Request rejected in wallet.");
   }
   return new Error(message);
 }
 
-function getWalletErrorText(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (value instanceof Error) return value.message;
-  if (value && typeof value === "object") {
-    try {
-      const message = (value as any).message;
-      if (typeof message === "string") return message;
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
-  }
-  return String(value ?? "");
-}
-
-function isBenignWalletNoise(value: unknown): boolean {
-  const text = getWalletErrorText(value).trim();
-  if (/proposal expired/i.test(text)) return true;
-  // Some WalletConnect/HashConnect paths emit empty object errors.
-  if (text === "{}" || text === "[object Object]") return true;
-  return false;
-}
-
 export function HederaWalletProvider({ children }: { children: ReactNode }) {
-  const hashConnectRef = useRef<HashConnectLike | null>(null);
+  const hashConnectRef = useRef<HashConnectInstance | null>(null);
+  const initPromiseRef = useRef<Promise<HashConnectInstance> | null>(null);
 
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [connectionState, setConnectionState] = useState<string>("Disconnected");
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [connectionState, setConnectionState] = useState<string>(CONNECTION_STATE.Disconnected);
   const [accountIds, setAccountIds] = useState<string[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [pairingString, setPairingString] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
+  const applyConnectedAccounts = useCallback((rawAccountIds: string[]) => {
+    const normalized = rawAccountIds.map(normalizeAccountId).filter(Boolean);
+    setAccountIds(normalized);
+    setSelectedAccountId((current) => current || normalized[0] || null);
+  }, []);
 
-    async function init() {
+  const resetConnectionState = useCallback(() => {
+    setConnectionState(CONNECTION_STATE.Disconnected);
+    setAccountIds([]);
+    setSelectedAccountId(null);
+  }, []);
+
+  const initHashConnect = useCallback(async (): Promise<HashConnectInstance> => {
+    if (hashConnectRef.current) return hashConnectRef.current;
+    if (initPromiseRef.current) return initPromiseRef.current;
+
+    const initTask = (async () => {
+      setIsInitializing(true);
+      setError(null);
+
       const rawProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim();
       const projectId =
         rawProjectId && !/^wc_project_id_here$|^your_project_id$|^<.*>$/.test(rawProjectId)
           ? rawProjectId
           : undefined;
+      if (!projectId) {
+        throw new Error(
+          "WalletConnect Project ID missing. Set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID in app/.env",
+        );
+      }
 
       const network =
         (process.env.NEXT_PUBLIC_HEDERA_NETWORK || "testnet").toLowerCase() === "mainnet"
-          ? "mainnet"
-          : "testnet";
+          ? LedgerId.MAINNET
+          : LedgerId.TESTNET;
 
-      if (!projectId) {
-        if (mounted) {
-          setError(
-            "WalletConnect Project ID missing or placeholder. Get a free ID at https://cloud.walletconnect.com (or dashboard.reown.com) and set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID in .env"
-          );
-          setIsInitializing(false);
-        }
-        return;
-      }
-
-      try {
-        const { HashConnect, HashConnectConnectionState } = await import("hashconnect");
-
-        const metadata = {
+      const { HashConnect, HashConnectConnectionState } = await import("hashconnect");
+      const hashconnect = new HashConnect(
+        network,
+        projectId,
+        {
           name: "Ascend",
           description: "Ascend AI Agent Intelligence Market",
           icons: ["https://hashpack.app/img/logo.svg"],
           url: typeof window !== "undefined" ? window.location.origin : "http://localhost:3000",
-        };
+        },
+        false,
+      );
 
-        const hashconnect: HashConnectLike = new HashConnect(
-          network === "mainnet" ? LedgerId.MAINNET : LedgerId.TESTNET,
-          projectId,
-          metadata,
-          false,
-        );
+      hashconnect.connectionStatusChangeEvent.on((status) => {
+        setConnectionState(String(status || HashConnectConnectionState.Disconnected || CONNECTION_STATE.Disconnected));
+      });
 
-        hashconnect.connectionStatusChangeEvent.on((status: string) => {
-          if (!mounted) return;
-          setConnectionState(status);
-        });
+      hashconnect.pairingEvent.on((pairing) => {
+        applyConnectedAccounts(pairing.accountIds);
+        setConnectionState(HashConnectConnectionState.Connected || CONNECTION_STATE.Connected);
+        setError(null);
+      });
 
-        hashconnect.pairingEvent.on((pairing: { accountIds: string[] }) => {
-          if (!mounted) return;
-          const ids = pairing.accountIds.map(normalizeAccountId);
-          setAccountIds(ids);
-          setSelectedAccountId((current) => current || ids[0] || null);
-        });
+      hashconnect.disconnectionEvent.on(() => {
+        resetConnectionState();
+      });
 
-        hashconnect.disconnectionEvent.on(() => {
-          if (!mounted) return;
-          setAccountIds([]);
-          setSelectedAccountId(null);
-          setConnectionState(HashConnectConnectionState.Disconnected);
-        });
+      await hashconnect.init();
+      hashConnectRef.current = hashconnect;
+      setPairingString(hashconnect.pairingString || null);
 
-        await hashconnect.init();
-
-        if (!mounted) return;
-
-        hashConnectRef.current = hashconnect;
-        setPairingString(hashconnect.pairingString || null);
-
-        const connected = hashconnect.connectedAccountIds.map((accountId) => accountId.toString());
-        if (connected.length > 0) {
-          setAccountIds(connected);
-          setSelectedAccountId((current) => current || connected[0] || null);
-        }
-      } catch (err: any) {
-        if (!mounted) return;
-        const msg = err?.message ?? String(err);
-        if (
-          /cannot redefine property:\s*ethereum/i.test(msg) ||
-          /defineProperty.*ethereum/i.test(msg)
-        ) {
-          setError(
-            "Wallet conflict: another extension (e.g. MetaMask) has already set up the wallet. Try disabling other wallet extensions for this site or use a separate browser profile, then reload."
-          );
-        } else {
-          setError(msg || "HashPack initialization failed");
-        }
-      } finally {
-        if (mounted) {
-          setIsInitializing(false);
-        }
+      const existing = hashconnect.connectedAccountIds.map((accountId) => accountId.toString());
+      if (existing.length > 0) {
+        applyConnectedAccounts(existing);
+        setConnectionState(HashConnectConnectionState.Connected || CONNECTION_STATE.Connected);
       }
+
+      return hashconnect;
+    })();
+
+    initPromiseRef.current = initTask;
+    try {
+      return await initTask;
+    } catch (err) {
+      const normalized = normalizeWalletError(err);
+      setError(normalized.message);
+      throw normalized;
+    } finally {
+      initPromiseRef.current = null;
+      setIsInitializing(false);
     }
-
-    void init();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const originalConsoleError = console.error.bind(console);
-    const originalReportError = (window as any).reportError;
-    const patchedConsoleError: typeof console.error = (...args: unknown[]) => {
-      if (args.some((arg) => isBenignWalletNoise(arg))) {
-        console.warn(...args);
-        return;
-      }
-      originalConsoleError(...args);
-    };
-
-    console.error = patchedConsoleError;
-    if (typeof originalReportError === "function") {
-      (window as any).reportError = (error: unknown) => {
-        if (isBenignWalletNoise(error)) return;
-        originalReportError(error);
-      };
-    }
-
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      if (isBenignWalletNoise(event.reason)) {
-        event.preventDefault();
-      }
-    };
-
-    const handleWindowError = (event: ErrorEvent) => {
-      const candidate = event.error ?? event.message;
-      if (isBenignWalletNoise(candidate)) {
-        event.preventDefault();
-      }
-    };
-
-    window.addEventListener("unhandledrejection", handleUnhandledRejection, true);
-    window.addEventListener("error", handleWindowError, true);
-
-    return () => {
-      console.error = originalConsoleError;
-      if (typeof originalReportError === "function") {
-        (window as any).reportError = originalReportError;
-      }
-      window.removeEventListener("unhandledrejection", handleUnhandledRejection, true);
-      window.removeEventListener("error", handleWindowError, true);
-    };
-  }, []);
+  }, [applyConnectedAccounts, resetConnectionState]);
 
   const connect = useCallback(async () => {
-    const hashconnect = hashConnectRef.current;
-    if (!hashconnect) {
-      throw new Error("HashPack wallet is not initialized");
-    }
     try {
-      await hashconnect.openPairingModal("dark");
+      const hashconnect = await initHashConnect();
+
+      const existing = hashconnect.connectedAccountIds.map((accountId) => accountId.toString());
+      if (existing.length > 0) {
+        applyConnectedAccounts(existing);
+        setConnectionState(CONNECTION_STATE.Connected);
+        setError(null);
+        return;
+      }
+
+      await hashconnect.openPairingModal("dark", "#0B0B0B", "#48DF7B", "#111111", "8px");
       setPairingString(hashconnect.pairingString || null);
+      setError(null);
     } catch (err) {
-      throw normalizeWalletError(err);
+      const normalized = normalizeWalletError(err);
+      setError(normalized.message);
+      throw normalized;
     }
-  }, []);
+  }, [applyConnectedAccounts, initHashConnect]);
 
   const disconnect = useCallback(async () => {
     const hashconnect = hashConnectRef.current;
-    if (!hashconnect) return;
+    if (!hashconnect) {
+      resetConnectionState();
+      return;
+    }
+
     try {
       await hashconnect.disconnect();
-      setAccountIds([]);
-      setSelectedAccountId(null);
+      resetConnectionState();
+      setError(null);
     } catch (err) {
       throw normalizeWalletError(err);
     }
-  }, []);
+  }, [resetConnectionState]);
 
   const sendTransaction = useCallback(
     async (transaction: Transaction, accountIdOverride?: string): Promise<unknown> => {
@@ -293,13 +244,13 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
         throw new Error("HashPack wallet is not initialized");
       }
 
-      const accountId = accountIdOverride || selectedAccountId;
+      const accountId = normalizeAccountId(accountIdOverride || selectedAccountId || "");
       if (!accountId) {
         throw new Error("No connected Hedera account");
       }
 
       try {
-        return await hashconnect.sendTransaction(accountId as any, transaction as any);
+        return await hashconnect.sendTransaction(AccountId.fromString(accountId) as any, transaction as any);
       } catch (err) {
         throw normalizeWalletError(err);
       }
@@ -314,13 +265,13 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
         throw new Error("HashPack wallet is not initialized");
       }
 
-      const accountId = accountIdOverride || selectedAccountId;
+      const accountId = normalizeAccountId(accountIdOverride || selectedAccountId || "");
       if (!accountId) {
         throw new Error("No connected Hedera account");
       }
 
       try {
-        const signatures = await hashconnect.signMessages(accountId as any, message);
+        const signatures = await hashconnect.signMessages(AccountId.fromString(accountId) as any, message);
         return JSON.stringify(signatures);
       } catch (err) {
         throw normalizeWalletError(err);
@@ -335,17 +286,17 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
       abi: any,
       functionName: string,
       args: any[],
-      payableAmountTinybars?: string
+      payableAmountTinybars?: string,
     ) => {
       const iface = new ethers.Interface(abi);
-      const data = iface.encodeFunctionData(functionName, args);
-      const functionParameters = Buffer.from(data.replace('0x', ''), 'hex');
+      const encodedData = iface.encodeFunctionData(functionName, args);
+      const functionParameters = Buffer.from(encodedData.replace("0x", ""), "hex");
 
       const contractId = ContractId.fromEvmAddress(0, 0, contractAddress);
 
       let tx = new ContractExecuteTransaction()
         .setContractId(contractId)
-        .setGas(500000)
+        .setGas(500_000)
         .setFunctionParameters(functionParameters);
 
       if (payableAmountTinybars) {
@@ -354,7 +305,7 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
 
       return sendTransaction(tx);
     },
-    [sendTransaction]
+    [sendTransaction],
   );
 
   const isConnected = !!selectedAccountId;
@@ -376,14 +327,14 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
       executeContractFunction,
     }),
     [
-      accountIds,
-      connect,
-      connectionState,
-      disconnect,
-      error,
       isInitializing,
-      pairingString,
+      connectionState,
+      accountIds,
       selectedAccountId,
+      pairingString,
+      error,
+      connect,
+      disconnect,
       sendTransaction,
       signMessage,
       isConnected,
@@ -391,9 +342,7 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return (
-    <HederaWalletContext.Provider value={value}>{children}</HederaWalletContext.Provider>
-  );
+  return <HederaWalletContext.Provider value={value}>{children}</HederaWalletContext.Provider>;
 }
 
 export function useHederaWallet(): HederaWalletContextValue {

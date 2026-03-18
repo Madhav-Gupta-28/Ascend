@@ -5,6 +5,17 @@ import { Loader2 } from "lucide-react";
 import { useHederaWallet, useHederaWalletLabel } from "@/components/HederaWalletProvider";
 import { toast } from "sonner";
 
+function isBenignWalletLog(message: string): boolean {
+  return /hashpack wallet is not initialized yet|wallet network temporarily unavailable|wallet pairing uri unavailable|proposal expired|request expired|relay unavailable|extension conflict/i.test(
+    message,
+  );
+}
+
+function isFatalWalletConfigError(message: string | null): boolean {
+  if (!message) return false;
+  return /project id missing|walletconnect project id/i.test(message);
+}
+
 export default function WalletConnectButton() {
   const {
     isInitializing,
@@ -18,16 +29,17 @@ export default function WalletConnectButton() {
   const [isWorking, setIsWorking] = useState(false);
 
   const isConnected = Boolean(selectedAccountId);
+  const isConfigError = isFatalWalletConfigError(error);
 
   const label = useMemo(() => {
     if (isInitializing) return "Wallet...";
     if (isConnected) return `Connected ${shortAccountId}`;
-    if (error) return "Wallet Config";
+    if (isConfigError) return "Wallet Config";
     return "Connect Wallet";
-  }, [error, isConnected, isInitializing, shortAccountId]);
+  }, [isConfigError, isConnected, isInitializing, shortAccountId]);
 
   const handleClick = async () => {
-    if (error || isInitializing || isWorking) return;
+    if (isConfigError || isInitializing || isWorking) return;
     setIsWorking(true);
     try {
       if (isConnected) {
@@ -38,8 +50,10 @@ export default function WalletConnectButton() {
     } catch (err: any) {
       const message = err?.message || "Wallet request failed";
       toast.error(message);
-      // Keep details in console for debugging without crashing UI.
-      console.warn("Wallet connect/disconnect error:", err);
+      if (!isBenignWalletLog(message)) {
+        // Keep details in console for unexpected cases only.
+        console.warn("Wallet connect/disconnect error:", err);
+      }
     } finally {
       setIsWorking(false);
     }
@@ -48,7 +62,7 @@ export default function WalletConnectButton() {
   return (
     <button
       onClick={() => void handleClick()}
-      disabled={Boolean(error) || isInitializing || isWorking}
+      disabled={isConfigError || isInitializing || isWorking}
       title={
         error ||
         (isConnected
