@@ -17,7 +17,6 @@ export interface AdminAgentStatus {
     description: string;
     active: boolean;
     registeredAt: number;
-    holRegistered: boolean;
     runtimeReady: boolean;
     operatorOwned: boolean;
     eligibleForAdminRounds: boolean;
@@ -27,14 +26,8 @@ export interface AdminRoundPlanEntry {
     roundId: number;
     selectedAgentIds: number[];
     selectedAgentNames: string[];
-    selectionPolicy: "FIRST_4_ELIGIBLE_BY_ID";
+    selectionPolicy: "LATEST_4_ACTIVE_BY_REGISTERED_AT_DESC";
     createdAt: string;
-}
-
-interface HolState {
-    accountId?: string;
-    inboundTopicId?: string;
-    profileTopicId?: string;
 }
 
 interface AdminRoundPlanFile {
@@ -47,6 +40,9 @@ const DEFAULT_CONFIG: AdminRoundConfig = {
     roundDurationSecs: 90,
     entryFeeHbar: 0.5,
 };
+
+export const ADMIN_SELECTION_POLICY = "LATEST_4_ACTIVE_BY_REGISTERED_AT_DESC" as const;
+const DEFAULT_STALE_GRACE_SECS = 120;
 
 function getRpcUrl(): string {
     return (
@@ -113,52 +109,152 @@ function getOperatorManagedOwnerAddress(): string | null {
     }
 }
 
-function sanitizeName(name: string): string {
-    return name.toLowerCase().replace(/[^a-z0-9]/g, "_");
-}
-
-function getHolStatePathCandidates(): string[] {
-    return [
-        process.env.HOL_STATE_DIR,
-        path.resolve(process.cwd(), "../agents/.cache"),
-        path.resolve(process.cwd(), ".cache"),
-    ].filter(Boolean) as string[];
-}
-
-function loadHolStateByAgentName(): Map<string, HolState> {
-    for (const dir of getHolStatePathCandidates()) {
-        try {
-            if (!fs.existsSync(dir)) continue;
-            const files = fs
-                .readdirSync(dir)
-                .filter((f) => f.startsWith("hol_") && f.endsWith("_state.json"));
-            if (files.length === 0) continue;
-
-            const out = new Map<string, HolState>();
-            for (const file of files) {
-                const key = file.replace(/^hol_/, "").replace(/_state\.json$/, "");
-                try {
-                    const parsed = JSON.parse(
-                        fs.readFileSync(path.join(dir, file), "utf8"),
-                    ) as HolState;
-                    out.set(key, parsed);
-                } catch {
-                    // Ignore malformed state file and keep parsing the rest.
-                }
-            }
-            return out;
-        } catch {
-            // Try next candidate.
-        }
-    }
-    return new Map<string, HolState>();
-}
-
 function getAdminRoundPlanPath(): string {
     return (
         process.env.ASCEND_ADMIN_ROUND_PLAN_PATH ||
         path.resolve(process.cwd(), "../agents/.cache/admin_round_plan.json")
     );
+}
+
+function getStaleRoundGraceSecs(): number {
+    const configured = Number(process.env.ASCEND_STALE_ROUND_GRACE_SECS || DEFAULT_STALE_GRACE_SECS);
+    if (!Number.isFinite(configured) || configured < 0) {
+        return DEFAULT_STALE_GRACE_SECS;
+    }
+    return Math.floor(configured);
+}
+
+function isActiveRoundStatus(status: number): boolean {
+    return status === 0 || status === 1;
+}
+
+export interface AdminRoundHealthEntry {
+    id: number;
+    status: number;
+    commitDeadline: number;
+    revealDeadline: number;
+    resolveAfter: number;
+    participantCount: number;
+    revealedCount: number;
+    stale: boolean;
+}
+
+export interface AdminRoundHealth {
+    roundCount: number;
+    latestRoundId: number;
+    activeRoundIds: number[];
+    staleActiveRoundIds: number[];
+    activeRounds: AdminRoundHealthEntry[];
+}
+
+function mapRoundHealthEntry(
+    roundId: number,
+    data: any,
+    nowSec: number,
+    staleGraceSecs: number,
+): AdminRoundHealthEntry {
+    const status = Number(data.status ?? data[6] ?? 0);
+    const commitDeadline = Number(data.commitDeadline ?? data[2] ?? 0);
+    const revealDeadline = Number(data.revealDeadline ?? data[3] ?? 0);
+    const resolveAfter = Number(data.resolveAfter ?? data[4] ?? 0);
+    const participantCount = Number(data.participantCount ?? data[8] ?? 0);
+    const revealedCount = Number(data.revealedCount ?? data[9] ?? 0);
+    const stale = isActiveRoundStatus(status) && nowSec > resolveAfter + staleGraceSecs;
+
+    return {
+        id: roundId,
+        status,
+        commitDeadline,
+        revealDeadline,
+        resolveAfter,
+        participantCount,
+        revealedCount,
+        stale,
+    };
+}
+
+export async function inspectAdminRoundHealth(): Promise<AdminRoundHealth> {
+    const marketAddress = getPredictionMarketAddress();
+    if (!marketAddress) {
+        throw new Error("PREDICTION_MARKET_ADDRESS not configured");
+    }
+
+    const provider = new ethers.JsonRpcProvider(getRpcUrl());
+    const market = new ethers.Contract(marketAddress, PREDICTION_MARKET_ABI, provider);
+    const roundCount = Number(await market.getRoundCount());
+    const latestRoundId = roundCount;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const staleGraceSecs = getStaleRoundGraceSecs();
+    const activeRounds: AdminRoundHealthEntry[] = [];
+
+    for (let roundId = 1; roundId <= roundCount; roundId++) {
+        try {
+            const data = await market.getRound(roundId);
+            const row = mapRoundHealthEntry(roundId, data, nowSec, staleGraceSecs);
+            if (isActiveRoundStatus(row.status)) {
+                activeRounds.push(row);
+            }
+        } catch {
+            // Ignore unreadable round slots.
+        }
+    }
+
+    activeRounds.sort((a, b) => b.id - a.id);
+    const activeRoundIds = activeRounds.map((round) => round.id);
+    const staleActiveRoundIds = activeRounds.filter((round) => round.stale).map((round) => round.id);
+
+    return {
+        roundCount,
+        latestRoundId,
+        activeRoundIds,
+        staleActiveRoundIds,
+        activeRounds,
+    };
+}
+
+export async function cleanupStaleAdminRounds(): Promise<
+    AdminRoundHealth & {
+        cancelledRoundIds: number[];
+        cancelledTxHashes: string[];
+    }
+> {
+    const marketAddress = getPredictionMarketAddress();
+    if (!marketAddress) {
+        throw new Error("PREDICTION_MARKET_ADDRESS not configured");
+    }
+
+    const initial = await inspectAdminRoundHealth();
+    if (initial.staleActiveRoundIds.length === 0) {
+        return {
+            ...initial,
+            cancelledRoundIds: [],
+            cancelledTxHashes: [],
+        };
+    }
+
+    const provider = new ethers.JsonRpcProvider(getRpcUrl());
+    const signer = new ethers.Wallet(getAdminSigningPrivateKey(), provider);
+    const market = new ethers.Contract(marketAddress, PREDICTION_MARKET_ABI, signer);
+
+    const cancelledRoundIds: number[] = [];
+    const cancelledTxHashes: string[] = [];
+
+    for (const roundId of initial.staleActiveRoundIds) {
+        const tx = await market.cancelRound(roundId, { gasLimit: 300_000 });
+        const receipt = await tx.wait();
+        if (!receipt) {
+            throw new Error(`Cleanup failed: no receipt for cancelRound(${roundId})`);
+        }
+        cancelledRoundIds.push(roundId);
+        cancelledTxHashes.push(String(receipt.hash));
+    }
+
+    const after = await inspectAdminRoundHealth();
+    return {
+        ...after,
+        cancelledRoundIds,
+        cancelledTxHashes,
+    };
 }
 
 function loadRoundPlanFile(): AdminRoundPlanFile {
@@ -235,7 +331,6 @@ export async function fetchAdminAgentStatuses(): Promise<{
     const provider = new ethers.JsonRpcProvider(getRpcUrl());
     const registry = new ethers.Contract(agentRegistryAddress, AGENT_REGISTRY_ABI, provider);
     let operatorOwnerAddress = getOperatorManagedOwnerAddress();
-    const holStates = loadHolStateByAgentName();
 
     const count = Number(await registry.getAgentCount());
     const rawAgents: Array<{
@@ -245,16 +340,12 @@ export async function fetchAdminAgentStatuses(): Promise<{
         description: string;
         active: boolean;
         registeredAt: number;
-        holRegistered: boolean;
     }> = [];
 
     for (let i = 1; i <= count; i++) {
         try {
             const data = await registry.getAgent(i);
             const name = String(data.name || "");
-            const holKey = sanitizeName(name);
-            const holState = holStates.get(holKey);
-            const holRegistered = Boolean(holState?.accountId && holState?.inboundTopicId);
 
             rawAgents.push({
                 id: i,
@@ -263,7 +354,6 @@ export async function fetchAdminAgentStatuses(): Promise<{
                 description: String(data.description || ""),
                 active: Boolean(data.active),
                 registeredAt: Number(data.registeredAt || 0),
-                holRegistered,
             });
         } catch {
             // Skip unreadable agent slots.
@@ -273,7 +363,7 @@ export async function fetchAdminAgentStatuses(): Promise<{
     if (!operatorOwnerAddress && rawAgents.length > 0) {
         const ownerCounts = new Map<string, number>();
         for (const agent of rawAgents) {
-            if (!agent.active || !agent.holRegistered) continue;
+            if (!agent.active) continue;
             const owner = agent.owner.toLowerCase();
             ownerCounts.set(owner, (ownerCounts.get(owner) || 0) + 1);
         }
@@ -285,7 +375,7 @@ export async function fetchAdminAgentStatuses(): Promise<{
         const operatorOwned = operatorOwnerAddress
             ? agent.owner.toLowerCase() === operatorOwnerAddress
             : false;
-        const runtimeReady = operatorOwned && agent.holRegistered;
+        const runtimeReady = operatorOwned;
         const eligibleForAdminRounds = agent.active && runtimeReady;
         return {
             ...agent,
@@ -296,7 +386,12 @@ export async function fetchAdminAgentStatuses(): Promise<{
     });
 
     allAgents.sort((a, b) => a.id - b.id);
-    const eligibleAgents = allAgents.filter((agent) => agent.eligibleForAdminRounds);
+    const eligibleAgents = allAgents
+        .filter((agent) => agent.eligibleForAdminRounds)
+        .sort((a, b) => {
+            if (b.registeredAt !== a.registeredAt) return b.registeredAt - a.registeredAt;
+            return b.id - a.id;
+        });
     const selectedAgents = eligibleAgents.slice(0, 4);
 
     return {
@@ -311,12 +406,24 @@ export async function createAdminRound(config: AdminRoundConfig): Promise<{
     roundId: number;
     txHash: string;
     startPriceUsd: number;
+    cancelledStaleRoundIds: number[];
+    cancelledStaleRoundTxHashes: string[];
 }> {
     const marketAddress = getPredictionMarketAddress();
     if (!marketAddress) {
         throw new Error("PREDICTION_MARKET_ADDRESS not configured");
     }
     const deployerKey = getAdminSigningPrivateKey();
+
+    // Safety gate: stale active rounds are auto-cancelled so only one active round can exist.
+    const cleanup = await cleanupStaleAdminRounds();
+    if (cleanup.activeRoundIds.length > 0) {
+        throw new Error(
+            `Cannot create new round while active round(s) exist: ${cleanup.activeRoundIds
+                .map((id) => `#${id}`)
+                .join(", ")}. Resolve/cancel them first.`,
+        );
+    }
 
     const priceRes = await fetch(
         "https://api.coingecko.com/api/v3/simple/price?ids=hedera-hashgraph&vs_currencies=usd",
@@ -379,5 +486,7 @@ export async function createAdminRound(config: AdminRoundConfig): Promise<{
         roundId,
         txHash: String(receipt.hash),
         startPriceUsd,
+        cancelledStaleRoundIds: cleanup.cancelledRoundIds,
+        cancelledStaleRoundTxHashes: cleanup.cancelledTxHashes,
     };
 }

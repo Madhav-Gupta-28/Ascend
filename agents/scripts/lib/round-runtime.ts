@@ -169,51 +169,73 @@ export async function buildDynamicAgentProfiles(
         heuristicProfiles.map((p) => [p.name.trim().toLowerCase(), p]),
     );
 
-    const profiles: AgentProfile[] = [];
+    const discovered: Array<{
+        id: number;
+        name: string;
+        description: string;
+        registeredAt: number;
+    }> = [];
     const maxAgents = Number(process.env.ORCHESTRATOR_MAX_AGENTS || "8");
 
-    for (let i = 1; i <= count && profiles.length < maxAgents; i++) {
+    for (let i = 1; i <= count; i++) {
         try {
             const agent = await contracts.getAgent(i);
             if (!agent.active) continue;
             if (agent.owner.toLowerCase() !== myAddress) continue;
-
-            const normalizedName = agent.name.trim().toLowerCase();
-
-            // Check if this matches a known heuristic agent
-            const knownKey = [...KNOWN_AGENT_NAMES].find(
-                (k) => normalizedName === k || normalizedName.startsWith(`${k}-`),
-            );
-
-            if (knownKey && heuristicMap.has(knownKey)) {
-                const heuristic = heuristicMap.get(knownKey)!;
-                profiles.push({
-                    id: i,
-                    name: agent.name,
-                    analyze: heuristic.analyze,
-                });
-                heuristicMap.delete(knownKey); // Don't reuse
-                console.log(`[dynamic-discovery] Agent #${i} "${agent.name}" → heuristic strategy (${knownKey})`);
-            } else {
-                // Generic LLM-based agent
-                profiles.push({
-                    id: i,
-                    name: agent.name,
-                    analyze: createGenericLLMAnalyzer(agent.name, agent.description),
-                });
-                console.log(`[dynamic-discovery] Agent #${i} "${agent.name}" → LLM strategy`);
-            }
+            discovered.push({
+                id: i,
+                name: agent.name,
+                description: agent.description,
+                registeredAt: Number(agent.registeredAt || 0n),
+            });
         } catch {
             // Skip unreadable agent IDs
         }
     }
 
-    if (profiles.length === 0) {
+    if (discovered.length === 0) {
         console.log("[dynamic-discovery] No owned agents found on-chain. Falling back to heuristic profiles.");
         return heuristicProfiles;
     }
 
-    console.log(`[dynamic-discovery] Discovered ${profiles.length} active owned agents.`);
+    discovered.sort((a, b) => {
+        if (b.registeredAt !== a.registeredAt) return b.registeredAt - a.registeredAt;
+        return b.id - a.id;
+    });
+
+    const selected = discovered.slice(0, Math.max(1, maxAgents));
+    const profiles: AgentProfile[] = [];
+
+    for (const agent of selected) {
+        const normalizedName = agent.name.trim().toLowerCase();
+        const knownKey = [...KNOWN_AGENT_NAMES].find(
+            (k) => normalizedName === k || normalizedName.startsWith(`${k}-`),
+        );
+
+        if (knownKey && heuristicMap.has(knownKey)) {
+            const heuristic = heuristicMap.get(knownKey)!;
+            profiles.push({
+                id: agent.id,
+                name: agent.name,
+                analyze: heuristic.analyze,
+            });
+            heuristicMap.delete(knownKey);
+            console.log(
+                `[dynamic-discovery] Agent #${agent.id} "${agent.name}" → heuristic strategy (${knownKey})`,
+            );
+        } else {
+            profiles.push({
+                id: agent.id,
+                name: agent.name,
+                analyze: createGenericLLMAnalyzer(agent.name, agent.description),
+            });
+            console.log(`[dynamic-discovery] Agent #${agent.id} "${agent.name}" → LLM strategy`);
+        }
+    }
+
+    console.log(
+        `[dynamic-discovery] Discovered ${discovered.length} active owned agents. Selected latest ${profiles.length}.`,
+    );
     return profiles;
 }
 

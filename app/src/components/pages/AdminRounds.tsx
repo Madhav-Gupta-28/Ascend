@@ -11,6 +11,7 @@ import {
     Loader2,
     CheckCircle2,
     XCircle,
+    Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -23,7 +24,6 @@ type AdminAgentStatus = {
     description: string;
     active: boolean;
     registeredAt: number;
-    holRegistered: boolean;
     runtimeReady: boolean;
     operatorOwned: boolean;
     eligibleForAdminRounds: boolean;
@@ -43,6 +43,9 @@ type AdminEligibleResponse = {
     selectedAgents: AdminAgentStatus[];
     totalEligible: number;
     selectedCount: number;
+    activeRoundIds: number[];
+    staleActiveRoundIds: number[];
+    latestRoundId: number;
     error?: string;
 };
 
@@ -59,6 +62,7 @@ export default function AdminRounds() {
     const [entryFeeHbar, setEntryFeeHbar] = useState("0.5");
     const [adminKey, setAdminKey] = useState("");
     const [isStarting, setIsStarting] = useState(false);
+    const [isCleaning, setIsCleaning] = useState(false);
     const [createdRound, setCreatedRound] = useState<CreatedRoundInfo | null>(null);
     const { getTransactionUrl } = useResolvedTransactionLinks([createdRound?.txHash ?? null]);
 
@@ -129,6 +133,38 @@ export default function AdminRounds() {
         }
     }
 
+    async function handleCleanupRounds() {
+        try {
+            setIsCleaning(true);
+            toast.loading("Cleaning stale rounds...", { id: "admin-round-cleanup" });
+            const res = await fetch("/api/admin/rounds/cleanup", {
+                method: "POST",
+                headers: {
+                    ...(adminKey.trim() ? { "x-admin-key": adminKey.trim() } : {}),
+                },
+            });
+            const json = await res.json();
+            if (!res.ok || !json?.success) {
+                throw new Error(json?.error || "Failed to cleanup stale rounds");
+            }
+            const cancelled = Array.isArray(json?.cancelledRoundIds) ? json.cancelledRoundIds : [];
+            if (cancelled.length === 0) {
+                toast.success("No stale rounds found", { id: "admin-round-cleanup" });
+            } else {
+                toast.success(`Cancelled stale round(s): ${cancelled.map((id: number) => `#${id}`).join(", ")}`, {
+                    id: "admin-round-cleanup",
+                });
+            }
+            await refetch();
+        } catch (error: any) {
+            toast.error(error?.message || "Failed to cleanup stale rounds", {
+                id: "admin-round-cleanup",
+            });
+        } finally {
+            setIsCleaning(false);
+        }
+    }
+
     return (
         <div className="max-w-6xl mx-auto space-y-8 py-8 px-4">
             <motion.div
@@ -144,9 +180,9 @@ export default function AdminRounds() {
                     Start Prediction Round
                 </h1>
                 <p className="text-sm md:text-base text-muted-foreground max-w-3xl">
-                    Admin starts the round; participant roster is deterministic: first 4 eligible live
-                    agents by on-chain agent ID. Eligibility requires active + HOL-registered +
-                    operator-managed runtime.
+                    Admin starts rounds with deterministic roster selection: latest 4 eligible
+                    ACTIVE agents by registration time. Stale active rounds can be cleaned before
+                    launch to keep demo flow deterministic.
                 </p>
             </motion.div>
 
@@ -158,14 +194,25 @@ export default function AdminRounds() {
                 >
                     <div className="flex items-center justify-between">
                         <h2 className="text-lg font-semibold text-foreground">Round Config</h2>
-                        <button
-                            type="button"
-                            onClick={() => void refetch()}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40"
-                        >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                            Refresh
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => void handleCleanupRounds()}
+                                disabled={isCleaning}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isCleaning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
+                                Cleanup Stale
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void refetch()}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40"
+                            >
+                                <RefreshCw className="h-3.5 w-3.5" />
+                                Refresh
+                            </button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -226,7 +273,12 @@ export default function AdminRounds() {
                     <button
                         type="button"
                         onClick={() => void handleStartRound()}
-                        disabled={isStarting || isLoading || (data?.selectedAgents?.length || 0) === 0}
+                        disabled={
+                            isStarting ||
+                            isLoading ||
+                            (data?.selectedAgents?.length || 0) === 0 ||
+                            (data?.activeRoundIds?.length || 0) > 0
+                        }
                         className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isStarting ? (
@@ -237,10 +289,17 @@ export default function AdminRounds() {
                         ) : (
                             <>
                                 <PlayCircle className="h-4 w-4" />
-                                Start Round (First 4 Eligible)
+                                Start Round (Latest 4 Active)
                             </>
                         )}
                     </button>
+
+                    {(data?.activeRoundIds?.length || 0) > 0 ? (
+                        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                            Active round(s) in progress: {(data?.activeRoundIds || []).map((id) => `#${id}`).join(", ")}.
+                            Finish or cleanup before starting a new round.
+                        </div>
+                    ) : null}
 
                     {createdRound ? (
                         <div className="rounded-lg border border-border bg-background px-3 py-2">
@@ -325,14 +384,13 @@ export default function AdminRounds() {
                     {(data?.allAgents || []).map((agent) => (
                         <div
                             key={agent.id}
-                            className="grid grid-cols-[minmax(0,1fr)_repeat(4,minmax(80px,120px))] gap-3 items-center rounded-lg border border-border px-3 py-2 text-xs"
+                            className="grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(80px,120px))] gap-3 items-center rounded-lg border border-border px-3 py-2 text-xs"
                         >
                             <div>
                                 <div className="font-medium text-foreground">#{agent.id} {agent.name}</div>
                                 <div className="text-muted-foreground truncate">{agent.description}</div>
                             </div>
                             <StatusBadge ok={agent.active} label="Active" />
-                            <StatusBadge ok={agent.holRegistered} label="HOL" />
                             <StatusBadge ok={agent.operatorOwned} label="Owned" />
                             <StatusBadge ok={agent.eligibleForAdminRounds} label="Eligible" />
                         </div>

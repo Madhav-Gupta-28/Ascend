@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+    ADMIN_SELECTION_POLICY,
     createAdminRound,
     fetchAdminAgentStatuses,
     parseAdminRoundConfig,
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
                 {
                     success: false,
                     error:
-                        "No eligible agents found. Ensure agents are active, HOL-registered, and operator-managed.",
+                        "No eligible agents found. Ensure agents are active and operator-managed.",
                 },
                 { status: 409 },
             );
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
             roundId: created.roundId,
             selectedAgentIds: selectedAgents.map((a) => a.id),
             selectedAgentNames: selectedAgents.map((a) => a.name),
-            selectionPolicy: "FIRST_4_ELIGIBLE_BY_ID",
+            selectionPolicy: ADMIN_SELECTION_POLICY,
             createdAt: new Date().toISOString(),
         });
 
@@ -68,18 +69,26 @@ export async function POST(req: NextRequest) {
             txHashscanUrl: `https://hashscan.io/${process.env.HEDERA_NETWORK || "testnet"}/transaction/${created.txHash}`,
             startPriceUsd: created.startPriceUsd,
             config,
-            selectionPolicy: "FIRST_4_ELIGIBLE_BY_ID",
+            selectionPolicy: ADMIN_SELECTION_POLICY,
             selectedAgents,
+            cancelledStaleRoundIds: created.cancelledStaleRoundIds,
+            cancelledStaleRoundTxHashes: created.cancelledStaleRoundTxHashes,
             note:
                 "Round created. Run orchestrator in admin-control mode to execute commit/reveal/resolve for the selected roster.",
         });
     } catch (error: any) {
+        const message = error?.message || "Failed to start admin round";
+        const status =
+            typeof message === "string" &&
+            message.toLowerCase().includes("active round")
+                ? 409
+                : 500;
         return NextResponse.json(
             {
                 success: false,
-                error: error?.message || "Failed to start admin round",
+                error: message,
             },
-            { status: 500 },
+            { status },
         );
     }
 }

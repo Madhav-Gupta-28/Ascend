@@ -61,16 +61,13 @@ export function hashscanTopicUrl(topicId: string, network = getHederaNetwork()):
 
 export function hashscanTransactionUrl(txIdOrHash: string, network = getHederaNetwork()): string {
     const trimmed = String(txIdOrHash || "").trim();
-    const value = isTransactionId(trimmed) ? normalizeTransactionId(trimmed) : trimmed;
-    return hashscanUrl("transaction", value, network);
+    if (isTransactionId(trimmed)) {
+        const txId = normalizeTransactionId(trimmed);
+        return `https://hashscan.io/${network}/tx/${encodeURIComponent(txId)}`;
+    }
+    return hashscanUrl("transaction", trimmed, network);
 }
 
 export function hashscanAddressUrl(address: string, network = getHederaNetwork()): string {
     return hashscanUrl("address", address, network);
-}
-
-export function holAgentProfileUrl(uaid?: string | null): string | null {
-    const normalized = String(uaid || "").trim();
-    if (!normalized) return null;
-    return `https://hol.org/registry/agent/${encodeURIComponent(normalized)}`;
 }

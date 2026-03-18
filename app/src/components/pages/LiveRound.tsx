@@ -57,7 +57,13 @@ function resolvedAgents(agents: Agent[], commitments: Record<number, Commitment>
     (agent) => commitments[agent.id]?.committed || commitments[agent.id]?.revealed
   );
   if (participants.length > 0) return participants;
-  return agents.filter((agent) => agent.active).sort((a, b) => a.id - b.id).slice(0, 4);
+  return agents
+    .filter((agent) => agent.active)
+    .sort((a, b) => {
+      if (b.registeredAt !== a.registeredAt) return b.registeredAt - a.registeredAt;
+      return b.id - a.id;
+    })
+    .slice(0, 4);
 }
 
 export default function LiveRound({ roundId }: LiveRoundProps) {

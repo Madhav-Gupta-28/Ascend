@@ -74,8 +74,9 @@ function capRoster(
     serialTxSecs: number,
     forceAllAgents: boolean,
 ): AgentProfile[] {
-    const sorted = [...roster].sort((a, b) => a.id - b.id);
-    const requested = sorted.slice(0, Math.max(1, participantLimit));
+    // Preserve incoming roster order. Upstream discovery/order logic decides
+    // precedence (latest registered agents first for deterministic demo flow).
+    const requested = [...roster].slice(0, Math.max(1, participantLimit));
     const maxSequentialAgents = Math.max(
         1,
         Math.floor(Math.max(1, revealDurationSecs - 2) / serialTxSecs),

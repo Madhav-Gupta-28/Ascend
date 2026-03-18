@@ -80,7 +80,10 @@ export default function MarketPanel({ round, agents, commitments, latestEventTim
   const liveRoundHref = "/round/latest";
   const sortedActiveAgents = [...agents]
     .filter((agent) => agent.active)
-    .sort((a, b) => a.id - b.id);
+    .sort((a, b) => {
+      if (b.registeredAt !== a.registeredAt) return b.registeredAt - a.registeredAt;
+      return b.id - a.id;
+    });
   const participatingAgents = sortedActiveAgents.filter((agent) => {
     const commitment = commitments[agent.id];
     return commitment?.committed || commitment?.revealed;

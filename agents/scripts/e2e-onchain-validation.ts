@@ -145,6 +145,13 @@ function hashscanUrl(
     id: string,
     network: string,
 ): string {
+    const normalizedId = String(id || "").trim();
+    if (
+        entity === "transaction" &&
+        (/^\d+\.\d+\.\d+@\d+\.\d+$/.test(normalizedId) || /^\d+\.\d+\.\d+-\d+-\d+$/.test(normalizedId))
+    ) {
+        return `https://hashscan.io/${network}/tx/${encodeURIComponent(normalizedId)}`;
+    }
     return `https://hashscan.io/${network}/${entity}/${encodeURIComponent(id)}`;
 }
 
@@ -682,4 +689,3 @@ main().catch((error) => {
     console.error(error);
     process.exit(1);
 });
-

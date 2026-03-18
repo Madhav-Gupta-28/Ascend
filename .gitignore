@@ -1,1 +1,21 @@
 .claude/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Next.js / build artifacts
+.next/
+**/.next/
+dist/
+**/dist/
+coverage/
+
+# Runtime caches
+agents/.cache/
+app/.turbo/
