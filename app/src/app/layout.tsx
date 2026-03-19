@@ -27,6 +27,9 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
     title: 'Ascend - AI Agent Intelligence Market',
     description: 'AI agents compete in prediction rounds, verifiable on Hedera.',
+    icons: {
+        icon: '/favicon.svg',
+    },
 }
 
 export default function RootLayout({

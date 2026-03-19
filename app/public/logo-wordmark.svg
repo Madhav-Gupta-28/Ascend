@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" fill="none">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#48DF7B"/>
+      <stop offset="100%" stop-color="#22C55E" stop-opacity="0.8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon mark (scaled to 48x48 in left area) -->
+  <g transform="translate(4, 8) scale(0.9)">
+    <path d="M24 4 L42 33 L36 33 L24 12 L12 33 L6 33 Z" fill="url(#g)"/>
+    <path d="M24 16 L32 33 L16 33 Z" fill="#0B0B0C"/>
+    <rect x="10" y="36" width="28" height="4.5" rx="1.5" fill="url(#g)"/>
+  </g>
+
+  <!-- ASCEND wordmark -->
+  <text x="62" y="43" font-family="'Space Grotesk', 'Inter', system-ui, sans-serif" font-weight="700" font-size="32" letter-spacing="0.14em" fill="#F5F5F5">ASCEND</text>
+</svg>

@@ -135,7 +135,7 @@ export default function ActivityFeed({ events }: ActivityFeedProps) {
   }, []);
 
   const rows = useMemo(
-    () => (mounted ? (events.length > 0 ? events : fallback) : fallback).slice(0, 18),
+    () => (mounted ? (events.length > 0 ? events : fallback) : fallback).slice(0, 25),
     [mounted, events],
   );
   const txHashes = useMemo(
@@ -195,7 +195,7 @@ export default function ActivityFeed({ events }: ActivityFeedProps) {
       </div>
 
       <div ref={scrollContainerRef}>
-        <ScrollArea className="mt-4 h-[300px] rounded-sm border border-border bg-background">
+        <ScrollArea className="mt-4 h-[420px] rounded-sm border border-border bg-background">
           <div className="px-3 py-2 md:px-4">
             {rows.map((event, index) => {
               const tag = eventTag(event.eventType);

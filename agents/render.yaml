@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: ascend-orchestrator
+    runtime: docker
+    dockerfilePath: ./agents/Dockerfile
+    dockerContext: ./agents
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: ORCHESTRATOR_ADMIN_CONTROL
+        value: "true"
+      - key: ORCHESTRATOR_COMMIT_SECS
+        value: "45"
+      - key: ORCHESTRATOR_REVEAL_SECS
+        value: "45"
+      - key: ORCHESTRATOR_ROUND_SECS
+        value: "90"
+      - key: ORCHESTRATOR_ENTRY_FEE_HBAR
+        value: "0.5"
+      - key: ORCHESTRATOR_PARTICIPANT_COUNT
+        value: "4"
+      - key: ORCHESTRATOR_SERIAL_TX_SECS
+        value: "6"
+      - key: ORCHESTRATOR_FORCE_ALL_AGENTS
+        value: "true"
+      - key: ORCHESTRATOR_WAKE_SECRET
+        sync: false
+      - key: HEDERA_OPERATOR_ID
+        sync: false
+      - key: HEDERA_OPERATOR_KEY
+        sync: false
+      - key: HEDERA_NETWORK
+        value: "testnet"
+      - key: COINGECKO_API_KEY
+        sync: false

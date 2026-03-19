@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#48DF7B" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#22C55E" stop-opacity="0.7"/>
+    </linearGradient>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#48DF7B" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#48DF7B" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Upward arrow / mountain peak — the "ascend" mark -->
+  <path d="M256 80 L400 340 L352 340 L256 160 L160 340 L112 340 Z" fill="url(#glow)"/>
+
+  <!-- Inner triangle cutout for depth -->
+  <path d="M256 200 L320 340 L192 340 Z" fill="#0B0B0C"/>
+
+  <!-- Base bar — stability / foundation -->
+  <rect x="128" y="360" width="256" height="40" rx="6" fill="url(#glow)"/>
+
+  <!-- Subtle glow trail beneath -->
+  <ellipse cx="256" cy="420" rx="140" ry="20" fill="url(#fade)"/>
+</svg>

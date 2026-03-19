@@ -63,6 +63,28 @@ export async function POST(req: NextRequest) {
             createdAt: new Date().toISOString(),
         });
 
+        // Wake the Render orchestrator so it picks up the new round
+        let orchestratorWake: { status: string; error?: string } = { status: "skipped" };
+        const renderUrl = process.env.ORCHESTRATOR_URL;
+        if (renderUrl) {
+            try {
+                const wakeRes = await fetch(`${renderUrl}/wake`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        ...(process.env.ORCHESTRATOR_WAKE_SECRET
+                            ? { Authorization: `Bearer ${process.env.ORCHESTRATOR_WAKE_SECRET}` }
+                            : {}),
+                    },
+                    signal: AbortSignal.timeout(10_000),
+                });
+                const wakeBody = await wakeRes.json().catch(() => ({}));
+                orchestratorWake = { status: wakeRes.ok ? "woken" : `http_${wakeRes.status}`, ...wakeBody };
+            } catch (err: any) {
+                orchestratorWake = { status: "unreachable", error: err?.message };
+            }
+        }
+
         return NextResponse.json({
             success: true,
             roundId: created.roundId,
@@ -74,8 +96,7 @@ export async function POST(req: NextRequest) {
             selectedAgents,
             cancelledStaleRoundIds: created.cancelledStaleRoundIds,
             cancelledStaleRoundTxHashes: created.cancelledStaleRoundTxHashes,
-            note:
-                "Round created. Run orchestrator in admin-control mode to execute commit/reveal/resolve for the selected roster.",
+            orchestratorWake,
         });
     } catch (error: any) {
         const message = error?.message || "Failed to start admin round";

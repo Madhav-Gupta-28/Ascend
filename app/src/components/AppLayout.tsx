@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import WalletConnectButton from "@/components/WalletConnectButton";
@@ -23,8 +24,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b border-border bg-background">
         <div className="container flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-secondary" />
+          <Link href="/" className="flex items-center gap-2.5">
+            <Image src="/logo-icon.svg" alt="Ascend" width={28} height={28} className="shrink-0" />
             <span className="font-display text-sm font-semibold uppercase tracking-[0.07em] text-foreground">Ascend</span>
           </Link>
 

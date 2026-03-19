@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ExternalLink, Gauge, Loader2 } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import RoundTimer from "@/components/RoundTimer";
 import { useCurrentRound, useRound, useCommitments } from "@/hooks/useRounds";
 import { useAgents } from "@/hooks/useAgents";
@@ -86,6 +86,16 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
     [timelineEvents],
   );
   const { getTransactionUrl } = useResolvedTransactionLinks(txHashes);
+
+  // Keep Render orchestrator alive during active rounds
+  const isRoundActive = round && round.status !== undefined && round.status < 2;
+  useEffect(() => {
+    if (!isRoundActive) return;
+    const id = setInterval(() => {
+      fetch("/api/orchestrator/status").catch(() => {});
+    }, 25_000);
+    return () => clearInterval(id);
+  }, [isRoundActive]);
 
   if (roundLoading) {
     return (
@@ -172,21 +182,37 @@ export default function LiveRound({ roundId }: LiveRoundProps) {
           <div>
             <p className="section-kicker">Round Terminal</p>
             <h1 className="section-title mt-1">Round #{round.id}</h1>
-            {round.status === 2 && resolvedTxHref ? (
-              <a
-                href={resolvedTxHref}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
-              >
+            <div className="mt-2 flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] ${
+                round.status === 0
+                  ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                  : round.status === 1
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                    : round.status === 2
+                      ? round.outcome === 0
+                        ? "border-secondary/40 bg-secondary/10 text-secondary"
+                        : "border-destructive/40 bg-destructive/10 text-destructive"
+                      : "border-border bg-card text-muted-foreground"
+              }`}>
+                {(round.status === 0 || round.status === 1) && (
+                  <span className={`h-1.5 w-1.5 rounded-full animate-pulse ${
+                    round.status === 0 ? "bg-blue-400" : "bg-amber-400"
+                  }`} />
+                )}
                 {statusLabel(round)}
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            ) : (
-              <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                {statusLabel(round)}
-              </p>
-            )}
+              </span>
+              {round.status === 2 && resolvedTxHref && (
+                <a
+                  href={resolvedTxHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary hover:text-secondary/85"
+                >
+                  Proof
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col items-start gap-2 md:items-end">

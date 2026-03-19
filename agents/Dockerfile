@@ -8,7 +8,6 @@ RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
 COPY scripts ./scripts
-COPY check-balance.ts ./check-balance.ts
-COPY test-commit-revert.ts ./test-commit-revert.ts
 
-CMD ["npm", "run", "run:orchestrator"]
+# Default: Render web service mode
+CMD ["npx", "tsx", "scripts/render-server.ts"]

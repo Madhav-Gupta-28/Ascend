@@ -11,6 +11,7 @@
         "test:hcs10": "npx tsx scripts/test-hcs10-simulation.ts",
         "test:agent-kit": "npx tsx scripts/test-hedera-agent-kit.ts",
         "run:orchestrator": "npx tsx scripts/run-orchestrator.ts",
+        "run:server": "npx tsx scripts/render-server.ts",
         "test:e2e:testnet": "npx tsx scripts/testnet-e2e-round.ts",
         "seed": "npx tsx scripts/seed-real-data.ts",
         "deploy:ethers": "npx tsx scripts/deploy-contracts-ethers.ts",

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#48DF7B"/>
+      <stop offset="100%" stop-color="#22C55E" stop-opacity="0.8"/>
+    </linearGradient>
+  </defs>
+  <!-- Compact peak mark -->
+  <path d="M24 6 L42 34 L36 34 L24 14 L12 34 L6 34 Z" fill="url(#g)"/>
+  <path d="M24 18 L32 34 L16 34 Z" fill="#0B0B0C"/>
+  <rect x="10" y="37" width="28" height="5" rx="1.5" fill="url(#g)"/>
+</svg>

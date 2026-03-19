@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import { useRoundsHistory } from "@/hooks/useRounds";
 import { useIntelligenceTimeline } from "@/hooks/useIntelligenceTimeline";
 import { useResolvedTransactionLinks } from "@/hooks/useResolvedTransactionLinks";
+import { displayAgentName } from "@/lib/agentDirectory";
 import type { Round } from "@/lib/types";
 
 function statusText(round: Round): string {
@@ -184,7 +185,7 @@ export default function RoundsHistory() {
                         {outcome}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-foreground">
-                        {winners.length > 0 ? winners.join(", ") : "—"}
+                        {winners.length > 0 ? winners.map(displayAgentName).join(", ") : "—"}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-sm text-foreground">{price(round.startPrice)}</td>
                       <td className="px-4 py-3 text-right font-mono text-sm text-foreground">

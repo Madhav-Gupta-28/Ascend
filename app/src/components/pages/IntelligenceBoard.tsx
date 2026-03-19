@@ -2,24 +2,21 @@
 
 import { useMemo } from "react";
 import { useAgents } from "@/hooks/useAgents";
-import { useCurrentRound, useCommitments } from "@/hooks/useRounds";
+import { useCurrentRound } from "@/hooks/useRounds";
 import { useTotalValueLocked } from "@/hooks/useStaking";
 import { useIntelligenceTimeline } from "@/hooks/useIntelligenceTimeline";
 import { formatHbar } from "@/lib/hedera";
+import Link from "next/link";
 import ProtocolHero from "@/components/terminal/ProtocolHero";
 import SystemMetrics from "@/components/terminal/SystemMetrics";
-import MarketPanel from "@/components/terminal/MarketPanel";
 import LeaderboardTable from "@/components/terminal/LeaderboardTable";
 import ActivityFeed from "@/components/terminal/ActivityFeed";
 
 export default function IntelligenceBoard() {
   const { data: agents = [], isLoading: agentsLoading } = useAgents();
   const { data: round } = useCurrentRound();
-  const { data: timelineEvents = [] } = useIntelligenceTimeline(30);
+  const { data: timelineEvents = [] } = useIntelligenceTimeline(50);
   const { data: tvl = 0n } = useTotalValueLocked();
-
-  const agentIds = useMemo(() => agents.map((agent) => agent.id), [agents]);
-  const { data: commitments = {} } = useCommitments(round?.id ?? 0, agentIds, round?.status);
 
   const metrics = useMemo(() => {
     const agentsActive = agents.filter((agent) => agent.active).length;
@@ -65,27 +62,57 @@ export default function IntelligenceBoard() {
         ))}
       </section>
 
-      <MarketPanel
-        round={round}
-        agents={agents}
-        commitments={commitments}
-        latestEventTimestamp={timelineEvents[0]?.timestamp ?? null}
-      />
+      {/* Compact live round status bar — links to full round page */}
+      {round && (
+        <Link
+          href="/round/latest"
+          className="group flex items-center justify-between rounded-md border border-border bg-background px-5 py-4 transition-colors hover:border-secondary/40"
+        >
+          <div className="flex items-center gap-4">
+            <span className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] ${
+              round.status === 0 || round.status === 1
+                ? "border-secondary/40 bg-secondary/10 text-secondary"
+                : "border-border bg-card text-muted-foreground"
+            }`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${
+                round.status === 0 || round.status === 1 ? "bg-secondary animate-pulse" : "bg-muted-foreground"
+              }`} />
+              {round.status === 0 ? "COMMITTING" : round.status === 1 ? "REVEALING" : round.status === 2 ? "RESOLVED" : "CLOSED"}
+            </span>
+            <span className="font-mono text-sm text-foreground">
+              Round #{round.id}
+            </span>
+            <span className="font-mono text-xs text-muted-foreground">
+              HBAR/USD {round.startPrice ? `$${round.startPrice.toFixed(4)}` : ""}
+            </span>
+          </div>
+          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-secondary opacity-0 transition-opacity group-hover:opacity-100">
+            Open Live Round →
+          </span>
+        </Link>
+      )}
 
       <ActivityFeed events={timelineEvents} />
 
       <LeaderboardTable agents={agents} loading={agentsLoading} limit={4} />
 
-      <footer className="terminal-surface px-5 py-6 md:px-6 md:py-7">
-        <div className="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+      {/* Proof strip — drives judges to verify page */}
+      <Link
+        href="/verify"
+        className="group terminal-surface flex items-center justify-between px-5 py-5 transition-colors hover:border-secondary/40 md:px-6"
+      >
+        <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-            Ascend Protocol
+            100% Verifiable
           </p>
-          <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-            Verifiable Agent Arena
+          <p className="mt-1 text-sm text-foreground">
+            Every prediction, reasoning message, and CredScore update is a Hedera transaction.
           </p>
         </div>
-      </footer>
+        <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary opacity-60 transition-opacity group-hover:opacity-100">
+          Verify on HashScan →
+        </span>
+      </Link>
     </div>
   );
 }
