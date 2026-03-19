@@ -492,23 +492,49 @@ export function loadDeployments(): Deployments {
     ];
 
     const deploymentsPath = candidates.find((candidate) => fs.existsSync(candidate));
-    if (!deploymentsPath) {
-        throw new Error("deployments.json not found. Run deploy and seed first.");
+
+    // If file exists, load from it
+    if (deploymentsPath) {
+        const raw = JSON.parse(fs.readFileSync(deploymentsPath, "utf-8"));
+        const contracts = raw.contracts ?? raw;
+        return {
+            network: raw.network ?? "testnet",
+            operatorId: raw.operatorId ?? "",
+            hcs: raw.hcs ?? {},
+            hts: raw.hts ?? { ascendTokenId: "" },
+            contracts: {
+                agentRegistry: contracts.agentRegistry ?? "",
+                predictionMarket: contracts.predictionMarket ?? "",
+                stakingVault: contracts.stakingVault ?? "",
+            },
+            createdAt: raw.createdAt ?? new Date().toISOString(),
+        };
     }
 
-    const raw = JSON.parse(fs.readFileSync(deploymentsPath, "utf-8"));
-    const contracts = raw.contracts ?? raw;
+    // Fallback: build from env vars (Render / Docker deploy without file)
+    const registry = process.env.AGENT_REGISTRY_ADDRESS;
+    const market = process.env.PREDICTION_MARKET_ADDRESS;
+    const vault = process.env.STAKING_VAULT_ADDRESS;
+
+    if (!registry || !market || !vault) {
+        throw new Error(
+            "deployments.json not found and contract address env vars not set. " +
+            "Either run deploy or set AGENT_REGISTRY_ADDRESS, PREDICTION_MARKET_ADDRESS, STAKING_VAULT_ADDRESS.",
+        );
+    }
+
+    console.log("[contract-client] No deployments.json found — using env vars for contract addresses.");
     return {
-        network: raw.network ?? "testnet",
-        operatorId: raw.operatorId ?? "",
-        hcs: raw.hcs ?? {},
-        hts: raw.hts ?? { ascendTokenId: "" },
+        network: process.env.HEDERA_NETWORK ?? "testnet",
+        operatorId: process.env.HEDERA_OPERATOR_ID ?? "",
+        hcs: {},
+        hts: { ascendTokenId: process.env.ASCEND_TOKEN_ID ?? "" },
         contracts: {
-            agentRegistry: contracts.agentRegistry ?? "",
-            predictionMarket: contracts.predictionMarket ?? "",
-            stakingVault: contracts.stakingVault ?? "",
+            agentRegistry: registry,
+            predictionMarket: market,
+            stakingVault: vault,
         },
-        createdAt: raw.createdAt ?? new Date().toISOString(),
+        createdAt: new Date().toISOString(),
     };
 }
 
