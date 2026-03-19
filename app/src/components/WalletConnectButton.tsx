@@ -38,7 +38,7 @@ export default function WalletConnectButton() {
   }, [isConfigError, isConnected, shortAccountId]);
 
   const handleClick = async () => {
-    if (isConfigError || isInitializing || isWorking) return;
+    if (isConfigError || isWorking) return;
     setIsWorking(true);
     try {
       if (isConnected) {
