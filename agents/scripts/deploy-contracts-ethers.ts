@@ -16,6 +16,20 @@ const REGISTRY_ART = loadArtifact("../contracts/out/AgentRegistry.sol/AgentRegis
 const MARKET_ART = loadArtifact("../contracts/out/PredictionMarket.sol/PredictionMarket.json");
 const VAULT_ART = loadArtifact("../contracts/out/StakingVault.sol/StakingVault.json");
 
+interface RootDeploymentsFile {
+    network?: string;
+    operatorId?: string;
+    hcs?: Record<string, unknown>;
+    hts?: Record<string, unknown>;
+    contracts?: {
+        agentRegistry?: string;
+        predictionMarket?: string;
+        stakingVault?: string;
+    };
+    createdAt?: string;
+    [key: string]: unknown;
+}
+
 async function main() {
     const rpcUrl = process.env.HEDERA_JSON_RPC || "https://testnet.hashio.io/api";
     const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
@@ -84,6 +98,28 @@ async function main() {
         JSON.stringify(config, null, 2)
     );
     console.log("\n📄 Saved to contracts/deployments.json");
+
+    const rootDeploymentsPath = path.resolve(process.cwd(), "../deployments.json");
+    let rootDeployments: RootDeploymentsFile = {};
+    if (fs.existsSync(rootDeploymentsPath)) {
+        rootDeployments = JSON.parse(fs.readFileSync(rootDeploymentsPath, "utf-8"));
+    }
+
+    const mergedRootDeployments: RootDeploymentsFile = {
+        ...rootDeployments,
+        network: rootDeployments.network || "testnet",
+        operatorId: rootDeployments.operatorId || process.env.HEDERA_OPERATOR_ID || "",
+        contracts: {
+            ...(rootDeployments.contracts || {}),
+            agentRegistry: registryAddr,
+            predictionMarket: marketAddr,
+            stakingVault: vaultAddr,
+        },
+        createdAt: new Date().toISOString(),
+    };
+
+    fs.writeFileSync(rootDeploymentsPath, JSON.stringify(mergedRootDeployments, null, 2));
+    console.log("📄 Updated ../deployments.json");
 
     // Update contract addresses in app/.env and root .env
     const updates: [string, string][] = [

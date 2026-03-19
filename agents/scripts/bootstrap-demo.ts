@@ -25,6 +25,7 @@ const STAKES = [
     { agentId: 3, amountHbar: 30 },    // Meridian
     { agentId: 4, amountHbar: 20 },    // Oracle
 ];
+const REGISTRATION_BOND_HBAR = 1;
 
 async function main() {
     console.log("═══════════════════════════════════════════");
@@ -43,7 +44,11 @@ async function main() {
         for (const agent of AGENTS) {
             try {
                 console.log(`  Registering ${agent.name}...`);
-                const agentId = await contracts.registerAgent(agent.name, agent.description, 10);
+                const agentId = await contracts.registerAgent(
+                    agent.name,
+                    agent.description,
+                    REGISTRATION_BOND_HBAR,
+                );
                 console.log(`  ✅ ${agent.name} registered as Agent #${agentId}`);
             } catch (err: any) {
                 if (err.message?.includes("Already registered")) {
