@@ -32,11 +32,10 @@ export default function WalletConnectButton() {
   const isConfigError = isFatalWalletConfigError(error);
 
   const label = useMemo(() => {
-    if (isInitializing) return "Wallet...";
     if (isConnected) return `Connected ${shortAccountId}`;
     if (isConfigError) return "Wallet Config";
     return "Connect Wallet";
-  }, [isConfigError, isConnected, isInitializing, shortAccountId]);
+  }, [isConfigError, isConnected, shortAccountId]);
 
   const handleClick = async () => {
     if (isConfigError || isInitializing || isWorking) return;
@@ -62,7 +61,7 @@ export default function WalletConnectButton() {
   return (
     <button
       onClick={() => void handleClick()}
-      disabled={isConfigError || isInitializing || isWorking}
+      disabled={isConfigError || isWorking}
       title={
         error ||
         (isConnected
@@ -75,7 +74,7 @@ export default function WalletConnectButton() {
           : "border-border bg-card text-foreground hover:bg-accent/70"
       }`}
     >
-      {isWorking || isInitializing ? (
+      {isWorking ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
       ) : (
         <span>{label}</span>

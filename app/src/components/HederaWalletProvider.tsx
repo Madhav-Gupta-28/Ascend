@@ -228,10 +228,17 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    void initHashConnect().catch((err) => {
-      const normalized = normalizeWalletError(err);
-      console.warn("Wallet restore skipped:", normalized.message);
-    });
+    // Timeout: if init takes >8s, stop spinner so button is usable
+    const timeout = setTimeout(() => {
+      setIsInitializing(false);
+    }, 8_000);
+
+    void initHashConnect()
+      .catch((err) => {
+        const normalized = normalizeWalletError(err);
+        console.warn("Wallet restore skipped:", normalized.message);
+      })
+      .finally(() => clearTimeout(timeout));
   }, [initHashConnect]);
 
   const handleSetSelectedAccountId = useCallback(
