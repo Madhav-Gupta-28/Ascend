@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // hashconnect and its WalletConnect deps have duplicate-var issues when
-  // minified by Next.js's production bundler. Transpiling them through
-  // Next's pipeline fixes the identifier collision.
+  // Transpile hashconnect + WalletConnect through Next's pipeline
+  // to fix identifier collisions in production minification
   transpilePackages: [
     "hashconnect",
     "@walletconnect/sign-client",
@@ -12,8 +11,28 @@ const nextConfig: NextConfig = {
     "@walletconnect/types",
     "@hashgraph/hedera-wallet-connect",
   ],
-  // Next 16 uses Turbopack by default — provide empty config to acknowledge
-  turbopack: {},
+
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // hashconnect and @hashgraph/sdk use Node.js builtins —
+      // provide browser polyfills / stubs
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        buffer: require.resolve("buffer/"),
+        crypto: false,
+        stream: false,
+        http: false,
+        https: false,
+        zlib: false,
+        net: false,
+        tls: false,
+        fs: false,
+        path: false,
+        os: false,
+      };
+    }
+    return config;
+  },
 };
 
 export default nextConfig;
