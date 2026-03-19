@@ -6,6 +6,7 @@ import {
     fetchAdminAgentStatuses,
     parseAdminRoundConfig,
     saveAdminRoundPlan,
+    signalLocalOrchestratorWake,
 } from "@/lib/server/admin-rounds";
 
 export const runtime = "nodejs";
@@ -63,6 +64,8 @@ export async function POST(req: NextRequest) {
             createdAt: new Date().toISOString(),
         });
 
+        const localWake = signalLocalOrchestratorWake(created.roundId);
+
         // Wake the Render orchestrator so it picks up the new round
         let orchestratorWake: { status: string; error?: string } = { status: "skipped" };
         const renderUrl = process.env.ORCHESTRATOR_URL;
@@ -96,6 +99,7 @@ export async function POST(req: NextRequest) {
             selectedAgents,
             cancelledStaleRoundIds: created.cancelledStaleRoundIds,
             cancelledStaleRoundTxHashes: created.cancelledStaleRoundTxHashes,
+            localWake,
             orchestratorWake,
         });
     } catch (error: any) {

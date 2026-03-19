@@ -36,6 +36,47 @@ function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function getOrchestratorWakePath(): string {
+    return (
+        process.env.ASCEND_ORCHESTRATOR_WAKE_PATH ||
+        path.resolve(process.cwd(), ".cache/orchestrator_wake.json")
+    );
+}
+
+function readWakeNonce(): number {
+    const file = getOrchestratorWakePath();
+    if (!fs.existsSync(file)) return 0;
+    try {
+        const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as { nonce?: number };
+        return Number(parsed?.nonce || 0);
+    } catch {
+        try {
+            return Math.floor(fs.statSync(file).mtimeMs);
+        } catch {
+            return 0;
+        }
+    }
+}
+
+async function sleepWithWake(ms: number, lastSeenWakeNonce: number): Promise<number> {
+    if (ms <= 0) return readWakeNonce();
+
+    const startedAt = Date.now();
+    let observed = lastSeenWakeNonce;
+
+    while (Date.now() - startedAt < ms) {
+        const latest = readWakeNonce();
+        if (latest > observed) {
+            return latest;
+        }
+        const remaining = ms - (Date.now() - startedAt);
+        await sleep(Math.min(1_000, Math.max(100, remaining)));
+        observed = latest;
+    }
+
+    return readWakeNonce();
+}
+
 interface AdminRoundPlanEntry {
     roundId: number;
     selectedAgentIds?: number[];
@@ -152,6 +193,7 @@ async function main() {
 
     const htsClient = htsEnabled ? createHTSClient() : null;
     const processedAdminRounds = new Set<number>();
+    let lastWakeNonce = readWakeNonce();
 
     console.log("═══════════════════════════════════════════");
     console.log("  ASCEND — Continuous Orchestrator");
@@ -270,7 +312,11 @@ async function main() {
         console.log(
             `[orchestrator] Sleeping ${cooldownSecs}s before next round (last loop ${elapsedSecs}s)`,
         );
-        await sleep(cooldownSecs * 1000);
+        const observedWakeNonce = await sleepWithWake(cooldownSecs * 1000, lastWakeNonce);
+        if (observedWakeNonce > lastWakeNonce) {
+            console.log("[orchestrator] Wake signal received — checking for new admin round immediately.");
+        }
+        lastWakeNonce = observedWakeNonce;
 
         // Re-discover agents between rounds so newly registered agents get picked up
         try {

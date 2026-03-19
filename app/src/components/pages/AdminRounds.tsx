@@ -12,6 +12,8 @@ import {
     CheckCircle2,
     XCircle,
     Wrench,
+    ExternalLink,
+    X,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -52,6 +54,10 @@ type AdminEligibleResponse = {
 type CreatedRoundInfo = {
     roundId: number;
     txHash: string;
+    txHashscanUrl: string;
+    selectedAgents: AdminAgentStatus[];
+    startPriceUsd: number | null;
+    orchestratorWake: { status: string; error?: string } | null;
 };
 
 export default function AdminRounds() {
@@ -110,13 +116,14 @@ export default function AdminRounds() {
                 throw new Error(json?.error || "Failed to start round");
             }
 
-            toast.success(`Round #${json.roundId} created`, {
-                id: "admin-round-start",
-                description: `Selected: ${(json.selectedAgents || []).map((a: AdminAgentStatus) => a.name).join(", ")}`,
-            });
+            toast.success(`Round #${json.roundId} started`, { id: "admin-round-start" });
             setCreatedRound({
                 roundId: Number(json.roundId),
                 txHash: String(json.txHash || ""),
+                txHashscanUrl: String(json.txHashscanUrl || ""),
+                selectedAgents: json.selectedAgents || [],
+                startPriceUsd: typeof json.startPriceUsd === "number" ? json.startPriceUsd : null,
+                orchestratorWake: json.orchestratorWake ?? null,
             });
 
             await Promise.all([

@@ -34,11 +34,23 @@ interface AdminRoundPlanFile {
     rounds: Record<string, AdminRoundPlanEntry>;
 }
 
+function toPositiveInt(input: string | undefined, fallback: number): number {
+    const parsed = Number(input ?? "");
+    if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+    return Math.floor(parsed);
+}
+
+function toNonNegativeNumber(input: string | undefined, fallback: number): number {
+    const parsed = Number(input ?? "");
+    if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+    return parsed;
+}
+
 const DEFAULT_CONFIG: AdminRoundConfig = {
-    commitDurationSecs: 45,
-    revealDurationSecs: 45,
-    roundDurationSecs: 90,
-    entryFeeHbar: 0.5,
+    commitDurationSecs: toPositiveInt(process.env.ORCHESTRATOR_COMMIT_SECS, 180),
+    revealDurationSecs: toPositiveInt(process.env.ORCHESTRATOR_REVEAL_SECS, 60),
+    roundDurationSecs: toPositiveInt(process.env.ORCHESTRATOR_ROUND_SECS, 300),
+    entryFeeHbar: toNonNegativeNumber(process.env.ORCHESTRATOR_ENTRY_FEE_HBAR, 1),
 };
 
 export const ADMIN_SELECTION_POLICY = "LATEST_4_ACTIVE_BY_REGISTERED_AT_DESC" as const;
@@ -113,6 +125,13 @@ function getAdminRoundPlanPath(): string {
     return (
         process.env.ASCEND_ADMIN_ROUND_PLAN_PATH ||
         path.resolve(process.cwd(), "../agents/.cache/admin_round_plan.json")
+    );
+}
+
+function getLocalOrchestratorWakePath(): string {
+    return (
+        process.env.ASCEND_ORCHESTRATOR_WAKE_PATH ||
+        path.resolve(process.cwd(), "../agents/.cache/orchestrator_wake.json")
     );
 }
 
@@ -283,6 +302,31 @@ export function saveAdminRoundPlan(entry: AdminRoundPlanEntry): void {
     const data = loadRoundPlanFile();
     data.rounds[String(entry.roundId)] = entry;
     saveRoundPlanFile(data);
+}
+
+export function signalLocalOrchestratorWake(roundId: number): { status: string; nonce: number } {
+    const file = getLocalOrchestratorWakePath();
+    const dir = path.dirname(file);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const nonce = Date.now();
+    fs.writeFileSync(
+        file,
+        JSON.stringify(
+            {
+                roundId,
+                nonce,
+                reason: "admin_round_created",
+                createdAt: new Date(nonce).toISOString(),
+            },
+            null,
+            2,
+        ),
+    );
+
+    return { status: "signaled", nonce };
 }
 
 export function getDefaultAdminRoundConfig(): AdminRoundConfig {

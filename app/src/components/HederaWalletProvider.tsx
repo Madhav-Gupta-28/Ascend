@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -67,6 +68,8 @@ const CONNECTION_STATE = {
   Connected: "Connected",
 } as const;
 
+const SELECTED_ACCOUNT_STORAGE_KEY = "ascend:selectedAccountId";
+
 function normalizeAccountId(accountId: string): string {
   const trimmed = accountId.trim();
   if (!trimmed) return trimmed;
@@ -110,17 +113,40 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
   const [pairingString, setPairingString] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const persistSelectedAccountId = useCallback((accountId: string | null) => {
+    if (typeof window === "undefined") return;
+    if (accountId) {
+      window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, accountId);
+      return;
+    }
+    window.localStorage.removeItem(SELECTED_ACCOUNT_STORAGE_KEY);
+  }, []);
+
   const applyConnectedAccounts = useCallback((rawAccountIds: string[]) => {
     const normalized = rawAccountIds.map(normalizeAccountId).filter(Boolean);
     setAccountIds(normalized);
-    setSelectedAccountId((current) => current || normalized[0] || null);
-  }, []);
+    setSelectedAccountId((current) => {
+      const stored =
+        typeof window !== "undefined"
+          ? normalizeAccountId(window.localStorage.getItem(SELECTED_ACCOUNT_STORAGE_KEY) || "")
+          : "";
+      const next =
+        (current && normalized.includes(current) && current) ||
+        (stored && normalized.includes(stored) && stored) ||
+        normalized[0] ||
+        null;
+      persistSelectedAccountId(next);
+      return next;
+    });
+  }, [persistSelectedAccountId]);
 
   const resetConnectionState = useCallback(() => {
     setConnectionState(CONNECTION_STATE.Disconnected);
     setAccountIds([]);
     setSelectedAccountId(null);
-  }, []);
+    setPairingString(null);
+    persistSelectedAccountId(null);
+  }, [persistSelectedAccountId]);
 
   const initHashConnect = useCallback(async (): Promise<HashConnectInstance> => {
     if (hashConnectRef.current) return hashConnectRef.current;
@@ -198,6 +224,24 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
       setIsInitializing(false);
     }
   }, [applyConnectedAccounts, resetConnectionState]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    void initHashConnect().catch((err) => {
+      const normalized = normalizeWalletError(err);
+      console.warn("Wallet restore skipped:", normalized.message);
+    });
+  }, [initHashConnect]);
+
+  const handleSetSelectedAccountId = useCallback(
+    (accountId: string) => {
+      const normalized = normalizeAccountId(accountId);
+      setSelectedAccountId(normalized || null);
+      persistSelectedAccountId(normalized || null);
+    },
+    [persistSelectedAccountId],
+  );
 
   const connect = useCallback(async () => {
     try {
@@ -320,7 +364,7 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
       error,
       connect,
       disconnect,
-      setSelectedAccountId,
+      setSelectedAccountId: handleSetSelectedAccountId,
       sendTransaction,
       signMessage,
       isConnected,
@@ -335,6 +379,7 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
       error,
       connect,
       disconnect,
+      handleSetSelectedAccountId,
       sendTransaction,
       signMessage,
       isConnected,
