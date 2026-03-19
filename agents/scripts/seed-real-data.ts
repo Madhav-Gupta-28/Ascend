@@ -20,7 +20,7 @@ const AGENTS = [
     { name: "Oracle", description: "Meta-AI" },
 ];
 
-const BOND_HBAR = 10;
+const BOND_HBAR = 1;
 const COMMIT_SECS = 60;
 const REVEAL_SECS = 30;
 const ROUND_SECS = 120;
