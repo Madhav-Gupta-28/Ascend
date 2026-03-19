@@ -152,6 +152,8 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
     if (hashConnectRef.current) return hashConnectRef.current;
     if (initPromiseRef.current) return initPromiseRef.current;
 
+    const INIT_TIMEOUT_MS = 12_000;
+
     const initTask = (async () => {
       setIsInitializing(true);
       setError(null);
@@ -199,7 +201,14 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
         resetConnectionState();
       });
 
-      await hashconnect.init();
+      // Race init against a timeout so the UI never hangs indefinitely
+      await Promise.race([
+        hashconnect.init(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("HashConnect init timed out. Open HashPack extension and retry.")), INIT_TIMEOUT_MS),
+        ),
+      ]);
+
       hashConnectRef.current = hashconnect;
       setPairingString(hashconnect.pairingString || null);
 
@@ -252,6 +261,11 @@ export function HederaWalletProvider({ children }: { children: ReactNode }) {
 
   const connect = useCallback(async () => {
     try {
+      // If init already completed or timed out previously, reset so we retry fresh
+      if (!hashConnectRef.current && !initPromiseRef.current) {
+        initPromiseRef.current = null;
+      }
+
       const hashconnect = await initHashConnect();
 
       const existing = hashconnect.connectedAccountIds.map((accountId) => accountId.toString());
