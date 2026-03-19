@@ -5,20 +5,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import WalletConnectButton from "@/components/WalletConnectButton";
 
-function useNavItems() {
-  return [
-    { path: "/round/latest", label: "Live Round" },
-    { path: "/rounds", label: "Rounds" },
-    { path: "/agents", label: "Agents" },
-    { path: "/staking", label: "Staking" },
-    { path: "/verify", label: "Proof" },
-    { path: "/register", label: "Register Agent" },
-  ];
-}
+const NAV_ITEMS = [
+  { path: "/round/latest", label: "Live Round", mobile: true },
+  { path: "/rounds", label: "Rounds", mobile: true },
+  { path: "/agents", label: "Agents", mobile: true },
+  { path: "/staking", label: "Staking", mobile: true },
+  { path: "/verify", label: "Proof", mobile: true },
+  { path: "/developers", label: "API", mobile: false },
+  { path: "/register", label: "Register Agent", mobile: false },
+];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const navItems = useNavItems();
 
   return (
     <div className="min-h-screen bg-background">
@@ -30,7 +28,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </Link>
 
           <nav className="hidden md:flex items-center gap-1.5">
-            {navItems.map(({ path, label }) => {
+            {NAV_ITEMS.map(({ path, label }) => {
               const current = pathname || "";
               const isActive =
                 path === "/round/latest"
@@ -58,10 +56,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* Mobile nav */}
+      {/* Mobile nav — only items flagged mobile:true */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background">
         <div className="flex items-center justify-around py-2.5">
-          {navItems.map(({ path, label }) => {
+          {NAV_ITEMS.filter((i) => i.mobile).map(({ path, label }) => {
             const current = pathname || "";
             const isActive =
               path === "/round/latest"

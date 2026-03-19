@@ -308,31 +308,6 @@ export default function AdminRounds() {
                         </div>
                     ) : null}
 
-                    {createdRound ? (
-                        <div className="rounded-lg border border-border bg-background px-3 py-2">
-                            <p className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                                Last Started Round
-                            </p>
-                            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-                                <Link
-                                    href={`/round/${createdRound.roundId}`}
-                                    className="text-foreground underline-offset-2 hover:underline"
-                                >
-                                    Round #{createdRound.roundId}
-                                </Link>
-                                {createdRound.txHash ? (
-                                    <a
-                                        href={getTransactionUrl(createdRound.txHash) || "#"}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-primary underline-offset-2 hover:underline"
-                                    >
-                                        Hashscan TX
-                                    </a>
-                                ) : null}
-                            </div>
-                        </div>
-                    ) : null}
                 </motion.section>
 
                 <motion.section
@@ -404,6 +379,124 @@ export default function AdminRounds() {
                     ))}
                 </div>
             </motion.section>
+
+            {/* Round Started Modal */}
+            {createdRound && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+                        onClick={() => setCreatedRound(null)}
+                    />
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        className="relative w-full max-w-md rounded-2xl border border-primary/30 bg-card p-6 shadow-2xl"
+                    >
+                        {/* Close */}
+                        <button
+                            type="button"
+                            onClick={() => setCreatedRound(null)}
+                            className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground hover:text-foreground"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+
+                        {/* Header */}
+                        <div className="flex items-center gap-3 mb-5">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/30 bg-primary/10">
+                                <CheckCircle2 className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-primary">
+                                    Round Started
+                                </p>
+                                <p className="text-lg font-bold text-foreground">
+                                    Round #{createdRound.roundId}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Details */}
+                        <div className="space-y-3 text-sm">
+                            {createdRound.startPriceUsd !== null && (
+                                <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
+                                    <span className="text-muted-foreground">Start Price</span>
+                                    <span className="font-mono font-semibold text-foreground">
+                                        ${createdRound.startPriceUsd.toFixed(4)} HBAR/USD
+                                    </span>
+                                </div>
+                            )}
+
+                            {createdRound.txHash && (
+                                <a
+                                    href={getTransactionUrl(createdRound.txHash) || createdRound.txHashscanUrl || "#"}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 hover:border-primary/40 transition-colors"
+                                >
+                                    <span className="text-muted-foreground">On-Chain TX</span>
+                                    <span className="flex items-center gap-1.5 font-mono text-xs text-primary">
+                                        {createdRound.txHash.slice(0, 18)}…
+                                        <ExternalLink className="h-3 w-3" />
+                                    </span>
+                                </a>
+                            )}
+
+                            {/* Agents */}
+                            <div className="rounded-lg border border-border bg-background px-3 py-2">
+                                <p className="mb-2 text-xs text-muted-foreground">Participating Agents</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {createdRound.selectedAgents.map((a) => (
+                                        <span
+                                            key={a.id}
+                                            className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[10px] text-primary"
+                                        >
+                                            {a.name}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Orchestrator wake status */}
+                            {createdRound.orchestratorWake && (
+                                <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
+                                    <span className="text-muted-foreground">Orchestrator</span>
+                                    <span className={`font-mono text-xs ${
+                                        createdRound.orchestratorWake.status === "woken"
+                                            ? "text-emerald-400"
+                                            : createdRound.orchestratorWake.status === "skipped"
+                                            ? "text-muted-foreground"
+                                            : "text-amber-400"
+                                    }`}>
+                                        {createdRound.orchestratorWake.status}
+                                        {createdRound.orchestratorWake.error
+                                            ? ` — ${createdRound.orchestratorWake.error}`
+                                            : ""}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* CTA */}
+                        <div className="mt-5 flex gap-2">
+                            <Link
+                                href={`/round/${createdRound.roundId}`}
+                                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                                onClick={() => setCreatedRound(null)}
+                            >
+                                Watch Live Round
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={() => setCreatedRound(null)}
+                                className="rounded-xl border border-border px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                            >
+                                Dismiss
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
         </div>
     );
 }
