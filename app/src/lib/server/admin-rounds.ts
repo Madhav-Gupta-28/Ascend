@@ -47,10 +47,10 @@ function toNonNegativeNumber(input: string | undefined, fallback: number): numbe
 }
 
 const DEFAULT_CONFIG: AdminRoundConfig = {
-    commitDurationSecs: toPositiveInt(process.env.ORCHESTRATOR_COMMIT_SECS, 180),
+    commitDurationSecs: toPositiveInt(process.env.ORCHESTRATOR_COMMIT_SECS, 120),
     revealDurationSecs: toPositiveInt(process.env.ORCHESTRATOR_REVEAL_SECS, 60),
-    roundDurationSecs: toPositiveInt(process.env.ORCHESTRATOR_ROUND_SECS, 300),
-    entryFeeHbar: toNonNegativeNumber(process.env.ORCHESTRATOR_ENTRY_FEE_HBAR, 1),
+    roundDurationSecs: toPositiveInt(process.env.ORCHESTRATOR_ROUND_SECS, 200),
+    entryFeeHbar: toNonNegativeNumber(process.env.ORCHESTRATOR_ENTRY_FEE_HBAR, 0),
 };
 
 export const ADMIN_SELECTION_POLICY = "LATEST_4_ACTIVE_BY_REGISTERED_AT_DESC" as const;

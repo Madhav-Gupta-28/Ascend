@@ -398,18 +398,23 @@ async function startServer() {
             let lastKnownRoundCount = 0;
             let consecutiveFailures = 0;
 
+            let pollSkipsRemaining = 0;
+
             async function pollForRounds() {
                 if (status === "running") return; // already processing
 
                 // Back off after consecutive failures (CoinGecko rate limits)
-                if (consecutiveFailures > 0) {
-                    const skipPolls = Math.min(consecutiveFailures * 2, 12); // max 3 min backoff
-                    console.log(`[poll] Backing off: skipping ${skipPolls} polls after ${consecutiveFailures} failures`);
-                    consecutiveFailures = 0; // reset, will increment again if next attempt fails
+                if (pollSkipsRemaining > 0) {
+                    pollSkipsRemaining--;
                     return;
                 }
 
                 try {
+                    // Pre-warm CoinGecko price cache on every poll so data is
+                    // instantly available when a round starts (avoids 10-40s
+                    // CoinGecko fetch delay eating into the commit window).
+                    dataCollector.collectMarketData().catch(() => {});
+
                     const currentCount = await contracts.getRoundCount();
                     if (currentCount > lastKnownRoundCount) {
                         console.log(`[poll] New round detected: #${currentCount} (was ${lastKnownRoundCount})`);
@@ -440,7 +445,8 @@ async function startServer() {
                     }
                 } catch (err: any) {
                     consecutiveFailures++;
-                    console.warn(`[poll] Error (failure #${consecutiveFailures}):`, err?.message);
+                    pollSkipsRemaining = Math.min(consecutiveFailures * 2, 12); // max 3 min backoff
+                    console.warn(`[poll] Error (failure #${consecutiveFailures}), skipping ${pollSkipsRemaining} polls:`, err?.message);
                 }
             }
 
