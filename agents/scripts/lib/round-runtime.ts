@@ -97,8 +97,23 @@ export function buildHeuristicAgentProfiles(): AgentProfile[] {
 }
 
 // ── Known built-in agent names (use heuristic strategies) ──
+// Match by first word: "Sentinel Prime" → "sentinel", "Pulse Signal" → "pulse", etc.
 
 const KNOWN_AGENT_NAMES = new Set(["sentinel", "pulse", "meridian", "oracle"]);
+
+function extractKnownAgentKey(name: string): string | undefined {
+    const normalized = name.trim().toLowerCase();
+    // Direct match: "sentinel", "pulse", etc.
+    if (KNOWN_AGENT_NAMES.has(normalized)) return normalized;
+    // Hyphenated match: "sentinel-835319"
+    for (const k of KNOWN_AGENT_NAMES) {
+        if (normalized.startsWith(`${k}-`)) return k;
+    }
+    // Multi-word match: "Sentinel Prime" → "sentinel", "Pulse Signal" → "pulse"
+    const firstWord = normalized.split(/[\s_-]/)[0];
+    if (KNOWN_AGENT_NAMES.has(firstWord)) return firstWord;
+    return undefined;
+}
 
 /**
  * Creates an LLM-based analyzer for dynamically registered agents.
@@ -207,10 +222,7 @@ export async function buildDynamicAgentProfiles(
     const profiles: AgentProfile[] = [];
 
     for (const agent of selected) {
-        const normalizedName = agent.name.trim().toLowerCase();
-        const knownKey = [...KNOWN_AGENT_NAMES].find(
-            (k) => normalizedName === k || normalizedName.startsWith(`${k}-`),
-        );
+        const knownKey = extractKnownAgentKey(agent.name);
 
         if (knownKey && heuristicMap.has(knownKey)) {
             const heuristic = heuristicMap.get(knownKey)!;
