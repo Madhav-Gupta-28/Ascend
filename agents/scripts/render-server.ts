@@ -396,9 +396,19 @@ async function startServer() {
         if (process.env.ORCHESTRATOR_ADMIN_CONTROL === "true") {
             const POLL_INTERVAL_MS = 15_000;
             let lastKnownRoundCount = 0;
+            let consecutiveFailures = 0;
 
             async function pollForRounds() {
                 if (status === "running") return; // already processing
+
+                // Back off after consecutive failures (CoinGecko rate limits)
+                if (consecutiveFailures > 0) {
+                    const skipPolls = Math.min(consecutiveFailures * 2, 12); // max 3 min backoff
+                    console.log(`[poll] Backing off: skipping ${skipPolls} polls after ${consecutiveFailures} failures`);
+                    consecutiveFailures = 0; // reset, will increment again if next attempt fails
+                    return;
+                }
+
                 try {
                     const currentCount = await contracts.getRoundCount();
                     if (currentCount > lastKnownRoundCount) {
@@ -410,6 +420,7 @@ async function startServer() {
                             forceAllAgents, htsEnabled, rewardPerWinnerTokens,
                             processedAdminRounds,
                         );
+                        consecutiveFailures = 0;
                     } else {
                         // Also check if latest round is still open (in case we missed it)
                         if (currentCount > 0 && !processedAdminRounds.has(currentCount)) {
@@ -422,12 +433,14 @@ async function startServer() {
                                     forceAllAgents, htsEnabled, rewardPerWinnerTokens,
                                     processedAdminRounds,
                                 );
+                                consecutiveFailures = 0;
                             }
                         }
                         lastKnownRoundCount = currentCount;
                     }
                 } catch (err: any) {
-                    console.warn("[poll] Error checking rounds:", err?.message);
+                    consecutiveFailures++;
+                    console.warn(`[poll] Error (failure #${consecutiveFailures}):`, err?.message);
                 }
             }
 

@@ -31,8 +31,13 @@ export interface MarketData {
 
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 
+/** Cache duration: 30 seconds. CoinGecko free tier allows ~30 calls/min. */
+const PRICE_CACHE_TTL_MS = 30_000;
+
 export class DataCollector {
     private apiKey?: string;
+    private cachedMarketData: MarketData | null = null;
+    private cacheTimestamp = 0;
 
     constructor(apiKey?: string) {
         this.apiKey = apiKey;
@@ -43,9 +48,20 @@ export class DataCollector {
         if (this.apiKey) {
             headers["x-cg-demo-api-key"] = this.apiKey;
         }
-        const res = await fetch(url, { headers });
-        if (!res.ok) throw new Error(`CoinGecko API error ${res.status}: ${url}`);
-        return res.json();
+
+        // Retry with backoff on 429
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const res = await fetch(url, { headers });
+            if (res.status === 429) {
+                const waitSecs = Math.pow(2, attempt + 1) * 5; // 10s, 20s, 40s
+                console.warn(`[data-collector] CoinGecko 429 rate limit, waiting ${waitSecs}s...`);
+                await new Promise((r) => setTimeout(r, waitSecs * 1000));
+                continue;
+            }
+            if (!res.ok) throw new Error(`CoinGecko API error ${res.status}: ${url}`);
+            return res.json();
+        }
+        throw new Error(`CoinGecko API error 429: rate limited after retries`);
     }
 
     /**
@@ -85,15 +101,23 @@ export class DataCollector {
     }
 
     /**
-     * Collect all market data for agents
+     * Collect all market data for agents.
+     * Returns cached data if less than 30s old to avoid CoinGecko rate limits.
      */
     async collectMarketData(): Promise<MarketData> {
+        const now = Date.now();
+        if (this.cachedMarketData && now - this.cacheTimestamp < PRICE_CACHE_TTL_MS) {
+            return this.cachedMarketData;
+        }
+
         const [price, ohlc] = await Promise.all([
             this.getHBARPrice(),
             this.getHBAROHLC(1),
         ]);
 
-        return { price, ohlc, fetchedAt: Date.now() };
+        this.cachedMarketData = { price, ohlc, fetchedAt: now };
+        this.cacheTimestamp = now;
+        return this.cachedMarketData;
     }
 
     /**
