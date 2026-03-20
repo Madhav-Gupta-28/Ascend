@@ -66,25 +66,36 @@ export async function POST(req: NextRequest) {
 
         const localWake = signalLocalOrchestratorWake(created.roundId);
 
-        // Wake the Render orchestrator so it picks up the new round
+        // Wake the Render orchestrator so it picks up the new round.
+        // Render free tier cold-starts take 30-60s, so we retry with increasing timeouts.
         let orchestratorWake: { status: string; error?: string } = { status: "skipped" };
         const renderUrl = process.env.ORCHESTRATOR_URL;
         if (renderUrl) {
-            try {
-                const wakeRes = await fetch(`${renderUrl}/wake`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        ...(process.env.ORCHESTRATOR_WAKE_SECRET
-                            ? { Authorization: `Bearer ${process.env.ORCHESTRATOR_WAKE_SECRET}` }
-                            : {}),
-                    },
-                    signal: AbortSignal.timeout(10_000),
-                });
-                const wakeBody = await wakeRes.json().catch(() => ({}));
-                orchestratorWake = { status: wakeRes.ok ? "woken" : `http_${wakeRes.status}`, ...wakeBody };
-            } catch (err: any) {
-                orchestratorWake = { status: "unreachable", error: err?.message };
+            const wakeHeaders: Record<string, string> = {
+                "Content-Type": "application/json",
+                ...(process.env.ORCHESTRATOR_WAKE_SECRET
+                    ? { Authorization: `Bearer ${process.env.ORCHESTRATOR_WAKE_SECRET}` }
+                    : {}),
+            };
+
+            // Try up to 3 times: 15s, 30s, 30s — covers Render cold-start
+            const timeouts = [15_000, 30_000, 30_000];
+            for (let attempt = 0; attempt < timeouts.length; attempt++) {
+                try {
+                    const wakeRes = await fetch(`${renderUrl}/wake`, {
+                        method: "POST",
+                        headers: wakeHeaders,
+                        signal: AbortSignal.timeout(timeouts[attempt]),
+                    });
+                    const wakeBody = await wakeRes.json().catch(() => ({}));
+                    orchestratorWake = { status: wakeRes.ok ? "woken" : `http_${wakeRes.status}`, ...wakeBody };
+                    break; // success
+                } catch (err: any) {
+                    orchestratorWake = { status: "unreachable", error: err?.message };
+                    if (attempt < timeouts.length - 1) {
+                        console.log(`[admin/start] Wake attempt ${attempt + 1} failed, retrying...`);
+                    }
+                }
             }
         }
 

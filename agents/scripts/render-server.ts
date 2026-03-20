@@ -387,6 +387,24 @@ async function startServer() {
         console.log("    GET  /status  — round status");
         console.log("    POST /wake    — trigger orchestrator");
         console.log("═══════════════════════════════════════════");
+
+        // Auto-wake on startup: if there's an active round, start processing immediately.
+        // This handles the case where Render cold-starts from a /wake call — the HTTP
+        // request that triggered the cold-start may have timed out, but the server is
+        // now alive and should pick up the pending round.
+        if (process.env.ORCHESTRATOR_ADMIN_CONTROL === "true") {
+            console.log("[server] Auto-wake: checking for active rounds on startup...");
+            runOnePass(
+                contracts, hcs, dataCollector, htsClient, config,
+                participantLimit, revealDurationSecs, serialTxSecs,
+                forceAllAgents, htsEnabled, rewardPerWinnerTokens,
+                processedAdminRounds,
+            ).then(() => {
+                console.log("[server] Auto-wake: startup pass complete.");
+            }).catch((err) => {
+                console.log("[server] Auto-wake: no active rounds or error:", err?.message);
+            });
+        }
     });
 }
 
