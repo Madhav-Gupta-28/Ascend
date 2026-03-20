@@ -388,22 +388,53 @@ async function startServer() {
         console.log("    POST /wake    — trigger orchestrator");
         console.log("═══════════════════════════════════════════");
 
-        // Auto-wake on startup: if there's an active round, start processing immediately.
-        // This handles the case where Render cold-starts from a /wake call — the HTTP
-        // request that triggered the cold-start may have timed out, but the server is
-        // now alive and should pick up the pending round.
+        // Round polling: check for new rounds every 15 seconds.
+        // This is critical because:
+        // 1. Render cold-start takes 50+ seconds
+        // 2. The /wake POST from Vercel times out before Render finishes booting
+        // 3. So the orchestrator needs to discover new rounds on its own
         if (process.env.ORCHESTRATOR_ADMIN_CONTROL === "true") {
-            console.log("[server] Auto-wake: checking for active rounds on startup...");
-            runOnePass(
-                contracts, hcs, dataCollector, htsClient, config,
-                participantLimit, revealDurationSecs, serialTxSecs,
-                forceAllAgents, htsEnabled, rewardPerWinnerTokens,
-                processedAdminRounds,
-            ).then(() => {
-                console.log("[server] Auto-wake: startup pass complete.");
-            }).catch((err) => {
-                console.log("[server] Auto-wake: no active rounds or error:", err?.message);
-            });
+            const POLL_INTERVAL_MS = 15_000;
+            let lastKnownRoundCount = 0;
+
+            async function pollForRounds() {
+                if (status === "running") return; // already processing
+                try {
+                    const currentCount = await contracts.getRoundCount();
+                    if (currentCount > lastKnownRoundCount) {
+                        console.log(`[poll] New round detected: #${currentCount} (was ${lastKnownRoundCount})`);
+                        lastKnownRoundCount = currentCount;
+                        await runOnePass(
+                            contracts, hcs, dataCollector, htsClient, config,
+                            participantLimit, revealDurationSecs, serialTxSecs,
+                            forceAllAgents, htsEnabled, rewardPerWinnerTokens,
+                            processedAdminRounds,
+                        );
+                    } else {
+                        // Also check if latest round is still open (in case we missed it)
+                        if (currentCount > 0 && !processedAdminRounds.has(currentCount)) {
+                            const latestRound = await contracts.getRound(currentCount);
+                            if (latestRound.status === 0 || latestRound.status === 1) {
+                                console.log(`[poll] Active round #${currentCount} found (status=${latestRound.status})`);
+                                await runOnePass(
+                                    contracts, hcs, dataCollector, htsClient, config,
+                                    participantLimit, revealDurationSecs, serialTxSecs,
+                                    forceAllAgents, htsEnabled, rewardPerWinnerTokens,
+                                    processedAdminRounds,
+                                );
+                            }
+                        }
+                        lastKnownRoundCount = currentCount;
+                    }
+                } catch (err: any) {
+                    console.warn("[poll] Error checking rounds:", err?.message);
+                }
+            }
+
+            // Initial check
+            console.log("[server] Starting round polling (every 15s)...");
+            pollForRounds().catch(() => {});
+            setInterval(() => { pollForRounds().catch(() => {}); }, POLL_INTERVAL_MS);
         }
     });
 }
