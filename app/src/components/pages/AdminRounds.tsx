@@ -85,6 +85,11 @@ export default function AdminRounds() {
             const res = await fetch("/api/orchestrator/status", { signal: AbortSignal.timeout(8_000) });
             if (!res.ok) throw new Error("not ok");
             const json = await res.json();
+            // Check if orchestrator is truly reachable (not just "not_configured" or "unreachable")
+            if (json.status === "not_configured" || json.status === "unreachable") {
+                setOrchStatus("offline");
+                return;
+            }
             setOrchStatus("awake");
             setOrchUptime(typeof json.uptime === "number" ? json.uptime : null);
             setOrchRoundsProcessed(typeof json.roundsProcessed === "number" ? json.roundsProcessed : 0);
@@ -95,15 +100,22 @@ export default function AdminRounds() {
 
     async function wakeOrchestrator() {
         setOrchStatus("waking");
+
+        function isAlive(json: any): boolean {
+            return json && json.status !== "not_configured" && json.status !== "unreachable";
+        }
+
         try {
             // First try health check — might already be awake
             const healthRes = await fetch("/api/orchestrator/status", { signal: AbortSignal.timeout(5_000) });
             if (healthRes.ok) {
                 const json = await healthRes.json();
-                setOrchStatus("awake");
-                setOrchUptime(typeof json.uptime === "number" ? json.uptime : null);
-                setOrchRoundsProcessed(typeof json.roundsProcessed === "number" ? json.roundsProcessed : 0);
-                return;
+                if (isAlive(json)) {
+                    setOrchStatus("awake");
+                    setOrchUptime(typeof json.uptime === "number" ? json.uptime : null);
+                    setOrchRoundsProcessed(typeof json.roundsProcessed === "number" ? json.roundsProcessed : 0);
+                    return;
+                }
             }
         } catch { /* cold — proceed to wake */ }
 
@@ -114,10 +126,12 @@ export default function AdminRounds() {
                 const res = await fetch("/api/orchestrator/status", { signal: AbortSignal.timeout(10_000) });
                 if (res.ok) {
                     const json = await res.json();
-                    setOrchStatus("awake");
-                    setOrchUptime(typeof json.uptime === "number" ? json.uptime : null);
-                    setOrchRoundsProcessed(typeof json.roundsProcessed === "number" ? json.roundsProcessed : 0);
-                    return;
+                    if (isAlive(json)) {
+                        setOrchStatus("awake");
+                        setOrchUptime(typeof json.uptime === "number" ? json.uptime : null);
+                        setOrchRoundsProcessed(typeof json.roundsProcessed === "number" ? json.roundsProcessed : 0);
+                        return;
+                    }
                 }
             } catch { /* still waking */ }
         }
