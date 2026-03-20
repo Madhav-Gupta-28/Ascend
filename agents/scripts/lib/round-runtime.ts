@@ -4,6 +4,7 @@ import type { ContractClient } from "../../src/core/contract-client.js";
 import { HTSClient } from "../../src/core/hts-client.js";
 import { generateObject } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import { z } from "zod";
 
 function clamp(n: number, min: number, max: number): number {
@@ -115,15 +116,21 @@ function extractKnownAgentKey(name: string): string | undefined {
     return undefined;
 }
 
+/** Schema for LLM prediction responses */
+const predictionSchema = z.object({
+    direction: z.enum(["UP", "DOWN"]),
+    confidence: z.number().min(0).max(100),
+    reasoning: z.string().max(800),
+});
+
 /**
  * Creates an LLM-based analyzer for dynamically registered agents.
- * Uses the agent's on-chain description as its persona prompt.
+ * Fallback chain: Gemini → Grok (xAI) → heuristic
  */
 function createGenericLLMAnalyzer(
     agentName: string,
     agentDescription: string,
 ): (data: MarketData) => Promise<{ direction: "UP" | "DOWN"; confidence: number; reasoning: string }> {
-    const gemini = createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY });
 
     return async (data: MarketData) => {
         const prompt = `You are ${agentName}, an AI prediction agent on the Ascend Intelligence Market built on Hedera.
@@ -138,32 +145,58 @@ Volume 24h: $${data.price.volume24h.toLocaleString()}
 Based on your strategy, predict whether HBAR/USD will go UP or DOWN in the next hour.
 Provide your confidence level (0-100) and a concise reasoning (max 200 words).`;
 
-        try {
-            const { object } = await generateObject({
-                model: gemini("gemini-1.5-flash"),
-                schema: z.object({
-                    direction: z.enum(["UP", "DOWN"]),
-                    confidence: z.number().min(0).max(100),
-                    reasoning: z.string().max(800),
-                }),
-                prompt,
-            });
-            return {
-                direction: object.direction,
-                confidence: clamp(Math.round(object.confidence), 40, 95),
-                reasoning: object.reasoning,
-            };
-        } catch (err: any) {
-            console.error(`[${agentName}] LLM analysis failed, using heuristic fallback: ${err.message}`);
-            // Fallback: simple heuristic based on 24h change
-            const direction = data.price.change24hPct >= 0 ? "UP" as const : "DOWN" as const;
-            const confidence = clamp(Math.round(55 + Math.abs(data.price.change24hPct) * 3), 45, 85);
-            return {
-                direction,
-                confidence,
-                reasoning: `Fallback heuristic: 24h change ${data.price.change24hPct.toFixed(2)}% suggests ${direction}.`,
-            };
+        // ── Try 1: Gemini ──
+        if (process.env.GEMINI_API_KEY) {
+            try {
+                const gemini = createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY });
+                const { object } = await generateObject({
+                    model: gemini("gemini-1.5-flash"),
+                    schema: predictionSchema,
+                    prompt,
+                });
+                console.log(`[${agentName}] Gemini prediction: ${object.direction} (${object.confidence}%)`);
+                return {
+                    direction: object.direction,
+                    confidence: clamp(Math.round(object.confidence), 40, 95),
+                    reasoning: object.reasoning,
+                };
+            } catch (err: any) {
+                console.warn(`[${agentName}] Gemini failed: ${err.message}`);
+            }
         }
+
+        // ── Try 2: Grok (xAI) — OpenAI-compatible API ──
+        if (process.env.XAI_API_KEY) {
+            try {
+                const xai = createOpenAI({
+                    apiKey: process.env.XAI_API_KEY,
+                    baseURL: "https://api.x.ai/v1",
+                });
+                const { object } = await generateObject({
+                    model: xai("grok-3-mini-fast"),
+                    schema: predictionSchema,
+                    prompt,
+                });
+                console.log(`[${agentName}] Grok prediction: ${object.direction} (${object.confidence}%)`);
+                return {
+                    direction: object.direction,
+                    confidence: clamp(Math.round(object.confidence), 40, 95),
+                    reasoning: object.reasoning,
+                };
+            } catch (err: any) {
+                console.warn(`[${agentName}] Grok failed: ${err.message}`);
+            }
+        }
+
+        // ── Fallback: heuristic ──
+        console.error(`[${agentName}] All LLMs failed, using heuristic fallback`);
+        const direction = data.price.change24hPct >= 0 ? "UP" as const : "DOWN" as const;
+        const confidence = clamp(Math.round(55 + Math.abs(data.price.change24hPct) * 3), 45, 85);
+        return {
+            direction,
+            confidence,
+            reasoning: `Fallback heuristic: 24h change ${data.price.change24hPct.toFixed(2)}% suggests ${direction}.`,
+        };
     };
 }
 
