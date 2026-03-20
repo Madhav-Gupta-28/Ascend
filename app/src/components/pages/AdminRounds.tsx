@@ -14,6 +14,8 @@ import {
     Wrench,
     ExternalLink,
     X,
+    Zap,
+    Server,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -71,6 +73,59 @@ export default function AdminRounds() {
     const [isCleaning, setIsCleaning] = useState(false);
     const [createdRound, setCreatedRound] = useState<CreatedRoundInfo | null>(null);
     const { getTransactionUrl } = useResolvedTransactionLinks([createdRound?.txHash ?? null]);
+
+    // Orchestrator pre-warm state
+    const [orchStatus, setOrchStatus] = useState<"unknown" | "checking" | "awake" | "waking" | "offline">("unknown");
+    const [orchUptime, setOrchUptime] = useState<number | null>(null);
+    const [orchRoundsProcessed, setOrchRoundsProcessed] = useState<number>(0);
+
+    async function checkOrchestrator() {
+        setOrchStatus("checking");
+        try {
+            const res = await fetch("/api/orchestrator/status", { signal: AbortSignal.timeout(8_000) });
+            if (!res.ok) throw new Error("not ok");
+            const json = await res.json();
+            setOrchStatus("awake");
+            setOrchUptime(typeof json.uptime === "number" ? json.uptime : null);
+            setOrchRoundsProcessed(typeof json.roundsProcessed === "number" ? json.roundsProcessed : 0);
+        } catch {
+            setOrchStatus("offline");
+        }
+    }
+
+    async function wakeOrchestrator() {
+        setOrchStatus("waking");
+        try {
+            // First try health check — might already be awake
+            const healthRes = await fetch("/api/orchestrator/status", { signal: AbortSignal.timeout(5_000) });
+            if (healthRes.ok) {
+                const json = await healthRes.json();
+                setOrchStatus("awake");
+                setOrchUptime(typeof json.uptime === "number" ? json.uptime : null);
+                setOrchRoundsProcessed(typeof json.roundsProcessed === "number" ? json.roundsProcessed : 0);
+                return;
+            }
+        } catch { /* cold — proceed to wake */ }
+
+        // Hit the status proxy repeatedly — each request hits Render, which triggers cold-start
+        for (let i = 0; i < 8; i++) {
+            await new Promise((r) => setTimeout(r, 5_000));
+            try {
+                const res = await fetch("/api/orchestrator/status", { signal: AbortSignal.timeout(10_000) });
+                if (res.ok) {
+                    const json = await res.json();
+                    setOrchStatus("awake");
+                    setOrchUptime(typeof json.uptime === "number" ? json.uptime : null);
+                    setOrchRoundsProcessed(typeof json.roundsProcessed === "number" ? json.roundsProcessed : 0);
+                    return;
+                }
+            } catch { /* still waking */ }
+        }
+        setOrchStatus("offline");
+    }
+
+    // Auto-check orchestrator on mount
+    useEffect(() => { checkOrchestrator(); }, []);
 
     const { data, isLoading, refetch } = useQuery({
         queryKey: ["admin-round-eligible"],
@@ -191,6 +246,75 @@ export default function AdminRounds() {
                     ACTIVE agents by registration time. Stale active rounds can be cleaned before
                     launch to keep demo flow deterministic.
                 </p>
+            </motion.div>
+
+            {/* Orchestrator Status — Pre-warm before demo */}
+            <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.02 }}
+                className={`rounded-xl border px-4 py-3 flex items-center justify-between gap-4 ${
+                    orchStatus === "awake"
+                        ? "border-emerald-500/30 bg-emerald-500/5"
+                        : orchStatus === "offline"
+                        ? "border-amber-500/30 bg-amber-500/5"
+                        : "border-border bg-card"
+                }`}
+            >
+                <div className="flex items-center gap-3">
+                    <Server className={`h-4 w-4 ${
+                        orchStatus === "awake" ? "text-emerald-400" : orchStatus === "offline" ? "text-amber-400" : "text-muted-foreground"
+                    }`} />
+                    <div>
+                        <p className="text-sm font-medium text-foreground">
+                            Orchestrator:{" "}
+                            <span className={
+                                orchStatus === "awake" ? "text-emerald-400" :
+                                orchStatus === "offline" ? "text-amber-400" :
+                                orchStatus === "waking" ? "text-blue-400" :
+                                "text-muted-foreground"
+                            }>
+                                {orchStatus === "awake" ? "AWAKE" :
+                                 orchStatus === "offline" ? "SLEEPING" :
+                                 orchStatus === "waking" ? "WAKING UP..." :
+                                 orchStatus === "checking" ? "CHECKING..." :
+                                 "UNKNOWN"}
+                            </span>
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                            {orchStatus === "awake" && orchUptime != null
+                                ? `Up ${Math.floor(orchUptime / 60)}m · ${orchRoundsProcessed} rounds processed`
+                                : orchStatus === "offline"
+                                ? "Render free tier is sleeping — wake it before starting a round"
+                                : orchStatus === "waking"
+                                ? "Cold-starting on Render... this takes ~30-60 seconds"
+                                : ""}
+                        </p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    {orchStatus === "awake" ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-400">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            Ready
+                        </span>
+                    ) : orchStatus === "waking" ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-blue-400">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Waking
+                        </span>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => void wakeOrchestrator()}
+                            disabled={orchStatus === "checking"}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <Zap className="h-3.5 w-3.5" />
+                            Wake Orchestrator
+                        </button>
+                    )}
+                </div>
             </motion.div>
 
             <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
