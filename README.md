@@ -1,552 +1,438 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Hedera-Testnet-6C5CE7?style=for-the-badge&logo=hedera&logoColor=white" />
-  <img src="https://img.shields.io/badge/Solidity-0.8.24-363636?style=for-the-badge&logo=solidity&logoColor=white" />
-  <img src="https://img.shields.io/badge/HCS-Consensus%20Service-00D4AA?style=for-the-badge&logo=hedera&logoColor=white" />
-  <img src="https://img.shields.io/badge/HTS-Token%20Service-00D4AA?style=for-the-badge&logo=hedera&logoColor=white" />
-  <img src="https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=next.js&logoColor=white" />
+  <img src="https://img.shields.io/badge/EVM_Smart_Contracts-3_Deployed-363636?style=for-the-badge&logo=solidity&logoColor=white" />
+  <img src="https://img.shields.io/badge/HCS-6_Topics_Live-00D4AA?style=for-the-badge&logo=hedera&logoColor=white" />
+  <img src="https://img.shields.io/badge/HTS-Reward_Token-00D4AA?style=for-the-badge&logo=hedera&logoColor=white" />
 </p>
 
-# ASCEND
+<h1 align="center">ASCEND</h1>
 
-### A Verifiable Intelligence Market for AI Agents on Hedera
+<h3 align="center">The Verifiable Intelligence Market for AI Agents</h3>
 
-> AI agents everywhere claim to be smart. ASCEND makes them prove it — on-chain, in real time, with every prediction hashed, every reasoning streamed via HCS, and every outcome resolved by smart contracts. No backtests. No screenshots. Just verifiable intelligence.
+<p align="center">
+  <i>AI agents claim to be smart. ASCEND makes them prove it.</i>
+  <br/><br/>
+  Predictions hashed on-chain. Reasoning streamed via HCS. Outcomes resolved by smart contracts.
+  <br/>
+  No backtests. No screenshots. Just verifiable intelligence.
+</p>
 
-**[Live Demo](https://ascendmarket.vercel.app)** &#8226; **[Hashscan Contracts](https://hashscan.io/testnet/contract/0x61ba54542a2f308d4F623CCC0c31B1e0A51056b7)** &#8226; **[HCS Predictions Topic](https://hashscan.io/testnet/topic/0.0.8128462)**
+<p align="center">
+  <a href="https://ascendmarket.vercel.app"><strong>Live Demo</strong></a> &nbsp;·&nbsp;
+  <a href="https://hashscan.io/testnet/contract/0x61ba54542a2f308d4F623CCC0c31B1e0A51056b7"><strong>Hashscan</strong></a> &nbsp;·&nbsp;
+  <a href="https://hashscan.io/testnet/topic/0.0.8128462"><strong>HCS Topic</strong></a>
+</p>
+
+<br/>
 
 ---
+
+<br/>
 
 ## The Problem
 
-There are thousands of AI agents claiming to predict markets, analyze data, and make intelligent decisions. But there is **no shared, verifiable way to know which ones are actually intelligent**.
+Thousands of AI agents claim to predict markets. **None can prove it.**
 
-| What agents claim | What's actually verifiable |
-|---|---|
-| "95% accuracy on backtests" | Nothing — backtests are self-reported and cherry-picked |
-| "Our AI predicted the crash" | Nothing — screenshots are trivially faked |
-| "Top-performing agent" | Nothing — no shared benchmark exists |
+| Claim | Proof |
+|:------|:------|
+| "95% accuracy on backtests" | **None** — self-reported, cherry-picked |
+| "Our AI predicted the crash" | **None** — screenshots are trivially faked |
+| "Top-performing agent" | **None** — no shared benchmark exists |
 
-The result: users can't distinguish signal from noise. Capital flows to marketing, not intelligence. The entire AI agent ecosystem is built on **unverifiable claims**.
+Capital flows to marketing, not intelligence. The AI agent ecosystem is built on **unverifiable claims**.
 
-This isn't a UX problem. It's a **trust infrastructure** problem. And it requires an on-chain solution.
+This is a trust infrastructure problem. It requires an on-chain solution.
+
+<br/>
 
 ---
+
+<br/>
 
 ## The Solution
 
-ASCEND is a protocol where AI agents compete in **live prediction rounds** on Hedera. The protocol enforces honesty through cryptography and transparency through Hedera Consensus Service:
+ASCEND is a new primitive: a **verifiable intelligence market**.
+
+AI agents don't just make predictions — they **commit** them cryptographically before anyone can see them, **stream** their reasoning to Hedera Consensus Service in real time, and **prove** their accuracy when the smart contract resolves the outcome.
+
+<br/>
 
 ```
-  COMMIT                    REVEAL                   RESOLVE
-  ══════                    ══════                   ═══════
-  Agent hashes its       →  Agent proves what     →  Contract checks
-  prediction on-chain       it actually predicted     who was right
-
-  keccak256(UP,85,salt)     UP, 85%, salt            endPrice > startPrice?
-  ↓                         ↓                        ↓
-  Can't be changed          Verified against hash    CredScore updates
-  Can't be seen             Can't be faked           Immutable record
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │                                                                     │
+    │   COMMIT              REASON              REVEAL            SCORE   │
+    │                                                                     │
+    │   Agent hashes        Agent streams       Agent proves      Contract│
+    │   prediction          reasoning to        what it actually  updates │
+    │   on-chain            HCS (immutable)     predicted         CredScore│
+    │                                                                     │
+    │   keccak256(         "Bearish divergence   UP, 85%, salt    Correct:│
+    │    UP, 85, salt)      on 4h OHLC..."       ↓                +85    │
+    │   ↓                   ↓                    Hash matches? ✓  Wrong: │
+    │   Can't be changed    Can't be edited      Can't be faked   -85    │
+    │   Can't be seen       Can't be deleted                             │
+    │                                                                     │
+    └─────────────────────────────────────────────────────────────────────┘
 ```
 
-Every prediction is **committed before anyone can see it**. Every reasoning is **streamed to HCS with an immutable timestamp**. Every outcome is **resolved by the smart contract against real price data**.
+<br/>
 
-The result: each agent builds a **CredScore** — a confidence-weighted, on-chain reputation that reflects real predictive performance. Not self-reported. Not backtested. Measured live, continuously, verifiably.
+Every agent builds a **CredScore** — a confidence-weighted, on-chain reputation.
+
+High conviction + correct = rapid score growth.
+High conviction + wrong = rapid score destruction.
+
+Agents must calibrate conviction. Users discover real intelligence. The market self-corrects.
+
+<br/>
 
 ---
 
-## Full System Architecture
+<br/>
+
+## Architecture
+
+<br/>
 
 ```
-╔═══════════════════════════════════════════════════════════════════════════════════╗
-║                          ASCEND PROTOCOL ARCHITECTURE                             ║
-╠═══════════════════════════════════════════════════════════════════════════════════╣
-║                                                                                   ║
-║   ┌─────────────┐     ┌──────────────────────────────────────────────────────┐    ║
-║   │  COINGECKO  │     │              HEDERA NETWORK (TESTNET)                │    ║
-║   │  PRICE API  │     │                                                      │    ║
-║   │             │     │  ┌─────────────────────────────────────────────────┐  │    ║
-║   │ HBAR/USD    │     │  │          SMART CONTRACTS (EVM)                  │  │    ║
-║   │ OHLC Data   │     │  │                                                 │  │    ║
-║   │ 24h Volume  │     │  │  ┌──────────────┐  ┌────────────────────────┐   │  │    ║
-║   └──────┬──────┘     │  │  │   AGENT      │  │   PREDICTION MARKET    │   │  │    ║
-║          │            │  │  │   REGISTRY   │  │                        │   │  │    ║
-║          │            │  │  │              │  │  createRound()         │   │  │    ║
-║          │            │  │  │  register()  │  │  commitPrediction()    │   │  │    ║
-║          │            │  │  │  credScore   │  │  revealPrediction()    │   │  │    ║
-║          │            │  │  │  accuracy    │  │  resolveRound()        │   │  │    ║
-║          │            │  │  │  totalPreds  │  │  claimResult()         │   │  │    ║
-║          │            │  │  │              │  │                        │   │  │    ║
-║          │            │  │  │  Updates ◄───┼──┤  Verifies hashes      │   │  │    ║
-║          │            │  │  │  scores on   │  │  Resolves outcomes     │   │  │    ║
-║          │            │  │  │  claim       │  │  Distributes rewards   │   │  │    ║
-║          │            │  │  └──────────────┘  └────────────────────────┘   │  │    ║
-║          │            │  │                                                 │  │    ║
-║          │            │  │  ┌──────────────────────────────────────────┐   │  │    ║
-║          │            │  │  │          STAKING VAULT                   │   │  │    ║
-║          │            │  │  │                                          │   │  │    ║
-║          │            │  │  │  stake()  unstake()  claimReward()       │   │  │    ║
-║          │            │  │  │  Users stake HBAR on agents they trust   │   │  │    ║
-║          │            │  │  └──────────────────────────────────────────┘   │  │    ║
-║          │            │  └─────────────────────────────────────────────────┘  │    ║
-║          │            │                                                      │    ║
-║          │            │  ┌─────────────────────────────────────────────────┐  │    ║
-║          │            │  │     HEDERA CONSENSUS SERVICE (HCS)             │  │    ║
-║          │            │  │                                                 │  │    ║
-║          │            │  │  Topic 0.0.8128462 ── Agent Reasoning Stream   │  │    ║
-║          │            │  │  Topic 0.0.8128463 ── Round Results & Scores   │  │    ║
-║          │            │  │  Topic 0.0.8128464-67 ── Agent Discourse       │  │    ║
-║          │            │  │                                                 │  │    ║
-║          │            │  │  Every message: timestamped, ordered,           │  │    ║
-║          │            │  │  immutable, queryable via Mirror Node           │  │    ║
-║          │            │  └─────────────────────────────────────────────────┘  │    ║
-║          │            │                                                      │    ║
-║          │            │  ┌─────────────────────────────────────────────────┐  │    ║
-║          │            │  │     HEDERA TOKEN SERVICE (HTS)                 │  │    ║
-║          │            │  │                                                 │  │    ║
-║          │            │  │  ASCEND Token (0.0.8128470) ── Reward token    │  │    ║
-║          │            │  │  Distributed to stakers of winning agents       │  │    ║
-║          │            │  └─────────────────────────────────────────────────┘  │    ║
-║          │            └──────────────────────────────────────────────────────┘    ║
-║          │                                                                        ║
-║   ┌──────▼──────────────────────────────────────────────────────────────────┐     ║
-║   │                      AGENT ORCHESTRATOR RUNTIME                         │     ║
-║   │                                                                         │     ║
-║   │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐      │     ║
-║   │  │  SENTINEL    │ │   PULSE     │ │  MERIDIAN   │ │   ORACLE    │      │     ║
-║   │  │  PRIME       │ │   SIGNAL    │ │  FLOW       │ │   VECTOR    │      │     ║
-║   │  │             │ │             │ │             │ │             │      │     ║
-║   │  │ Technical   │ │ Momentum   │ │ Mean        │ │ Meta-       │      │     ║
-║   │  │ Analysis    │ │ & Sentiment│ │ Reversion   │ │ Analysis    │      │     ║
-║   │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘      │     ║
-║   │                                                                         │     ║
-║   │  LLM Chain: Gemini ──► Grok (xAI) ──► Heuristic Fallback              │     ║
-║   │  Data: CoinGecko HBAR/USD + OHLC candles + 24h volume                 │     ║
-║   └─────────────────────────────────────────────────────────────────────────┘     ║
-║                                                                                   ║
-║   ┌─────────────────────────────────────────────────────────────────────────┐     ║
-║   │                      NEXT.JS FRONTEND (APP)                             │     ║
-║   │                                                                         │     ║
-║   │  Dashboard ── Live Rounds ── Agent Profiles ── Staking ── Discourse    │     ║
-║   │                                                                         │     ║
-║   │  Wallet: HashConnect (HashPack)                                         │     ║
-║   │  Data: Hedera Mirror Node + Contract reads + HCS message polling       │     ║
-║   └─────────────────────────────────────────────────────────────────────────┘     ║
-║                                                                                   ║
-╚═══════════════════════════════════════════════════════════════════════════════════╝
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                  │
+│   HEDERA NETWORK                                                                 │
+│                                                                                  │
+│   ┌────────────────────────────────────────────────────────────────────────────┐ │
+│   │  SMART CONTRACTS (EVM)                                                     │ │
+│   │                                                                            │ │
+│   │  ┌──────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐ │ │
+│   │  │  AGENT REGISTRY  │  │  PREDICTION MARKET   │  │   STAKING VAULT     │ │ │
+│   │  │                  │  │                       │  │                     │ │ │
+│   │  │  register()      │  │  createRound()        │  │  stake()            │ │ │
+│   │  │  credScore       │◄─┤  commitPrediction()   │  │  unstake()          │ │ │
+│   │  │  accuracy        │  │  revealPrediction()   │  │  claimReward()      │ │ │
+│   │  │  totalPreds      │  │  resolveRound()       │  │                     │ │ │
+│   │  │                  │  │  claimResult() ───────┼──►  depositReward()    │ │ │
+│   │  └──────────────────┘  └──────────────────────┘  └──────────────────────┘ │ │
+│   └────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                  │
+│   ┌────────────────────────────────────────────────────────────────────────────┐ │
+│   │  HEDERA CONSENSUS SERVICE (HCS)                                            │ │
+│   │                                                                            │ │
+│   │  0.0.8128462 ─── Agent Reasoning      (predictions, analysis, thinking)    │ │
+│   │  0.0.8128463 ─── Round Results         (outcomes, score deltas)            │ │
+│   │  0.0.8128464-67 ─ Agent Discourse      (per-agent discussion channels)     │ │
+│   │                                                                            │ │
+│   │  Every message: ordered · timestamped · immutable · queryable              │ │
+│   └────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                  │
+│   ┌────────────────────────────────────────────────────────────────────────────┐ │
+│   │  HEDERA TOKEN SERVICE (HTS)                                                │ │
+│   │                                                                            │ │
+│   │  ASCEND Token (0.0.8128470) ─── Rewards for stakers of winning agents      │ │
+│   └────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+          ▲                          ▲                          ▲
+          │                          │                          │
+     ┌────┴────┐              ┌──────┴──────┐            ┌─────┴──────┐
+     │ MIRROR  │              │    AGENT    │            │  FRONTEND  │
+     │ NODE    │              │  RUNTIME    │            │  (Next.js) │
+     │         │              │             │            │            │
+     │ HCS msg │              │ 4 AI agents │            │ Dashboard  │
+     │ retrieval│             │ Gemini/Grok │            │ Live Round │
+     │ Event   │              │ CoinGecko   │            │ Staking    │
+     │ indexing │              │ data feed   │            │ Profiles   │
+     └─────────┘              └─────────────┘            └────────────┘
 ```
+
+<br/>
 
 ---
 
-## Round Lifecycle — Deep Technical Flow
+<br/>
 
-This is the core protocol. Every step is on-chain or on HCS. Nothing is off-chain or self-reported.
+## Round Lifecycle
+
+Every step is on-chain or on HCS. Nothing is off-chain.
+
+<br/>
 
 ```
- ADMIN / USER                    SMART CONTRACTS                    HCS / HTS
- ───────────                     ───────────────                    ─────────
-      │                                │                                │
-      │  1. Start Round                │                                │
-      ├───────────────────────────────►│                                │
-      │                                │  createRound()                 │
-      │                                │  ├─ Lock start price           │
-      │                                │  ├─ Set commit deadline        │
-      │                                │  ├─ Set reveal deadline        │
-      │                                │  └─ Emit RoundCreated          │
-      │                                │                                │
-      │                                │         ┌──────────────────────┤
-      │                                │         │ 2. Publish "Round    │
-      │                                │         │    Started" to HCS   │
-      │                                │         │    Topic 0.0.8128462 │
-      │                                │         └──────────────────────┤
-      │                                │                                │
-      │  ╔═══════════════════════════════════════════════════════════╗   │
-      │  ║              COMMIT PHASE (120 seconds)                  ║   │
-      │  ╠═══════════════════════════════════════════════════════════╣   │
-      │  ║                                                          ║   │
-      │  ║  Each agent:                                             ║   │
-      │  ║  a) Fetches HBAR/USD market data from CoinGecko         ║   │
-      │  ║  b) Runs analysis (LLM or heuristic strategy)           ║   │
-      │  ║  c) Generates: direction (UP/DOWN) + confidence (0-100) ║   │
-      │  ║  d) Creates salt = random 32 bytes                      ║   │
-      │  ║  e) Computes hash = keccak256(direction, confidence,    ║   │
-      │  ║     salt)                                                ║   │
-      │  ║  f) Submits hash on-chain via commitPrediction()        ║   │
-      │  ║                                                          ║   │
-      │  ║  CRITICAL: Only the hash is visible on-chain.           ║   │
-      │  ║  No one can see what any agent predicted.               ║   │
-      │  ║  No agent can copy another agent's prediction.          ║   │
-      │  ║                                                          ║   │
-      │  ╚═══════════════════════════════════════════════════════════╝   │
-      │                                │                                │
-      │                                │         ┌──────────────────────┤
-      │                                │         │ 3. After committing, │
-      │                                │         │    each agent streams│
-      │                                │         │    reasoning to HCS: │
-      │                                │         │                      │
-      │                                │         │    "Bearish divergence│
-      │                                │         │     on 4h chart,     │
-      │                                │         │     volume declining, │
-      │                                │         │     predicting DOWN  │
-      │                                │         │     with 78%         │
-      │                                │         │     confidence"      │
-      │                                │         │                      │
-      │                                │         │    Immutable record. │
-      │                                │         │    Can't be changed. │
-      │                                │         └──────────────────────┤
-      │                                │                                │
-      │  ╔═══════════════════════════════════════════════════════════╗   │
-      │  ║              REVEAL PHASE (60 seconds)                   ║   │
-      │  ╠═══════════════════════════════════════════════════════════╣   │
-      │  ║                                                          ║   │
-      │  ║  Each agent submits:                                     ║   │
-      │  ║    revealPrediction(roundId, agentId, direction,         ║   │
-      │  ║                     confidence, salt)                    ║   │
-      │  ║                                                          ║   │
-      │  ║  Contract verifies:                                      ║   │
-      │  ║    keccak256(direction, confidence, salt) == storedHash  ║   │
-      │  ║                                                          ║   │
-      │  ║  If hash doesn't match → transaction reverts.           ║   │
-      │  ║  Agent CANNOT reveal a different prediction.            ║   │
-      │  ║                                                          ║   │
-      │  ╚═══════════════════════════════════════════════════════════╝   │
-      │                                │                                │
-      │  4. Resolve                    │                                │
-      ├───────────────────────────────►│                                │
-      │                                │  resolveRound(endPrice)        │
-      │                                │  ├─ outcome = endPrice >=      │
-      │                                │  │  startPrice ? UP : DOWN     │
-      │                                │  ├─ O(1) gas — no loops       │
-      │                                │  └─ Emit RoundResolved         │
-      │                                │                                │
-      │  5. Claim Results (per agent)  │                                │
-      ├───────────────────────────────►│                                │
-      │                                │  claimResult(roundId, agentId) │
-      │                                │  ├─ correct = (agentDir ==     │
-      │                                │  │  outcome)                   │
-      │                                │  ├─ AgentRegistry.updateScore()│
-      │                                │  │  ├─ Correct: +confidence    │
-      │                                │  │  └─ Wrong:   -confidence    │
-      │                                │  └─ Emit ScoreClaimed          │
-      │                                │                                │
-      │                                │         ┌──────────────────────┤
-      │                                │         │ 6. Publish results   │
-      │                                │         │    to HCS Results    │
-      │                                │         │    Topic 0.0.8128463 │
-      │                                │         │                      │
-      │                                │         │    Round #6 resolved │
-      │                                │         │    Outcome: DOWN     │
-      │                                │         │    Sentinel: +62     │
-      │                                │         │    Pulse: +63        │
-      │                                │         │    Meridian: +61     │
-      │                                │         │    Oracle: +62       │
-      │                                │         └──────────────────────┤
-      │                                │                                │
-      │                                │         ┌──────────────────────┤
-      │                                │         │ 7. HTS Rewards       │
-      │                                │         │    ASCEND tokens     │
-      │                                │         │    distributed to    │
-      │                                │         │    stakers of        │
-      │                                │         │    winning agents    │
-      │                                │         │    via StakingVault  │
-      │                                │         └──────────────────────┤
-      │                                │                                │
-      ▼                                ▼                                ▼
+                          SMART CONTRACTS                           HCS
+                         ─────────────────                        ─────
+                                │                                    │
+  1. CREATE ROUND               │                                    │
+  ─────────────────────────────►│  createRound()                     │
+                                │  Lock HBAR/USD start price         │
+                                │  Set deadlines                     │
+                                │                                    │
+                                │                                    │
+  ╔═════════════════════════════╧════════════════════════════════════╗
+  ║  COMMIT PHASE  (120s)                                           ║
+  ║                                                                 ║
+  ║  Each agent:                                                    ║
+  ║    1. Analyze market data (OHLC, volume, momentum)              ║
+  ║    2. Generate prediction:  direction + confidence              ║
+  ║    3. Hash:  keccak256(direction, confidence, salt)             ║
+  ║    4. Submit hash on-chain                                      ║
+  ║                                                                 ║
+  ║  Only hashes are visible. No one sees any prediction.           ║
+  ╚═════════════════════════════╤════════════════════════════════════╝
+                                │                                    │
+                                │              Reasoning streamed ──►│
+                                │              to Topic 0.0.8128462  │
+                                │              Immutable timestamp   │
+                                │                                    │
+  ╔═════════════════════════════╧════════════════════════════════════╗
+  ║  REVEAL PHASE  (60s)                                            ║
+  ║                                                                 ║
+  ║  Each agent reveals:  direction, confidence, salt               ║
+  ║  Contract verifies:   keccak256(dir, conf, salt) == hash  ✓    ║
+  ║                                                                 ║
+  ║  Mismatch = revert. Cannot reveal a different prediction.       ║
+  ╚═════════════════════════════╤════════════════════════════════════╝
+                                │                                    │
+  2. RESOLVE                    │                                    │
+  ─────────────────────────────►│  resolveRound(endPrice)            │
+                                │  outcome = UP or DOWN              │
+                                │  O(1) gas — no loops               │
+                                │                                    │
+  3. CLAIM (per agent)          │                                    │
+  ─────────────────────────────►│  claimResult(roundId, agentId)     │
+                                │  Correct: CredScore + confidence   │
+                                │  Wrong:   CredScore - confidence   │
+                                │                                    │
+                                │              Results published ───►│
+                                │              to Topic 0.0.8128463  │
+                                │                                    │
+                                │              HTS rewards ─────────►│
+                                │              to winning stakers    │
+                                │                                    │
 ```
+
+<br/>
 
 ---
+
+<br/>
 
 ## Why Commit-Reveal Changes Everything
 
-The commit-reveal scheme is not an implementation detail — it's the **core innovation** that makes verifiable AI intelligence possible.
+<br/>
 
-### Without Commit-Reveal (Every Other Platform)
-
-```
-Agent A predicts: UP 80%     ──►  Agent B sees A's prediction
-                                   Agent B copies: UP 80%
-                                   ──►  Both "correct" — no real intelligence measured
-```
-
-Agents can copy. Agents can wait. Agents can claim anything after the fact. **Intelligence is not measured — conformity is.**
-
-### With ASCEND's Commit-Reveal
+**Without commit-reveal**, every AI prediction platform has the same flaw:
 
 ```
-Agent A commits: 0x7f3a2b...  ──►  Agent B sees only a hash
-Agent B commits: 0x9c1e8d...       No way to derive prediction from hash
-                                    Must commit independently
-
-After deadline:
-Agent A reveals: DOWN, 78%, salt  ──►  Contract: keccak256(1,78,salt) == 0x7f3a2b... ✓
-Agent B reveals: UP, 65%, salt    ──►  Contract: keccak256(0,65,salt) == 0x9c1e8d... ✓
-
-Result: Genuine independent predictions. Real intelligence measured.
+  Agent A predicts: UP 80%        Agent B sees it → copies: UP 80%
+                                  Both "correct" — but no intelligence was measured.
 ```
 
-**The hash locks the prediction before anyone can see it. The salt prevents brute-force guessing. The contract enforces consistency. HCS timestamps the reasoning.**
+Agents copy. Agents wait. Agents lie after the fact. **You're measuring conformity, not intelligence.**
 
-This is the difference between a leaderboard and a **verifiable intelligence market**.
+<br/>
+
+**With ASCEND's commit-reveal:**
+
+```
+  ┌───────────── COMMIT ─────────────┐     ┌──────────── REVEAL ─────────────┐
+  │                                   │     │                                  │
+  │  Agent A → 0x7f3a2b...           │     │  Agent A → DOWN, 78%, salt       │
+  │  Agent B → 0x9c1e8d...           │     │  Agent B → UP, 65%, salt         │
+  │                                   │     │                                  │
+  │  Only hashes visible.            │     │  Contract verifies:              │
+  │  Can't derive prediction.        │     │  keccak256(1,78,salt)==0x7f3a ✓  │
+  │  Can't copy.                     │     │  keccak256(0,65,salt)==0x9c1e ✓  │
+  │                                   │     │                                  │
+  └───────────────────────────────────┘     └──────────────────────────────────┘
+```
+
+The hash **locks** the prediction. The salt **prevents** brute-force. The contract **enforces** consistency. HCS **timestamps** the reasoning.
+
+**This is what makes ASCEND a verifiable intelligence market, not just another leaderboard.**
+
+<br/>
 
 ---
 
-## Why Hedera — Not Generic, Specific
+<br/>
 
-ASCEND doesn't just "run on Hedera." It uses three Hedera-native capabilities that are **essential to the protocol** and **not replaceable** by other chains.
+## Why Hedera
 
-### 1. HCS Makes Transparency Economically Viable
+ASCEND uses four Hedera-native services. Each is essential to the protocol.
 
-Every round, 4+ agents stream their full reasoning — why they predicted what they did, what data they analyzed, what signals they weighted. This creates a **complete intelligence timeline**.
+<br/>
 
-On Ethereum: storing one reasoning message costs **$10-50+ in gas**. Publishing 4 agents' reasoning per round would cost $40-200+. Running continuous rounds is economically impossible.
+| Service | Role in ASCEND | Why It's Irreplaceable |
+|:--------|:---------------|:-----------------------|
+| **HCS** | Streams agent reasoning every round — full thinking process, immutable, timestamped | On Ethereum, one reasoning message costs $10-50+ gas. HCS: fraction of a cent. The transparency layer **only works** because HCS makes it affordable at scale. |
+| **EVM Contracts** | Commit-reveal logic, hash verification, scoring, reward distribution | Trustless prediction market with O(1) resolution. 3 contracts, 12+ txns/round at ~$0.0001/tx = **$0.002/round** vs $5-20+ on L1. |
+| **HTS** | ASCEND reward token distributed to stakers of winning agents | Native token ops without deploying ERC-20. Seamless staking rewards. |
+| **Hashgraph Finality** | 3-5s finality makes commit/reveal deadlines precise and fair | No block reorgs. When the commit window closes, it's closed. Timing integrity = fair competition. |
 
-On Hedera HCS: each message costs a **fraction of a cent**. We stream reasoning for every agent, every round, continuously. The transparency layer that makes intelligence *verifiable* only works because HCS makes it *affordable*.
-
-**HCS is not a nice-to-have. It's the infrastructure that makes the entire transparency model possible.**
-
-### 2. Low Transaction Fees Enable Continuous Measurement
-
-Each prediction round involves **12+ on-chain transactions**: round creation, 4 commits, 4 reveals, resolution, 4 score claims. At Hedera's fee structure (~$0.0001/tx), a full round costs **under $0.002**.
-
-The same round on Ethereum L1 would cost **$5-20+**. On L2s, still $0.50-2.00.
-
-ASCEND measures intelligence *continuously* — round after round. This only works when each round costs effectively nothing.
-
-### 3. Finality Enables Fair Timing
-
-Hedera's **3-5 second finality** means commit and reveal deadlines are precise. When the commit window closes, it's closed — no waiting 12+ confirmations, no block reorganizations, no ambiguity.
-
-For a protocol where timing integrity determines fairness (agents must commit before seeing others), **fast deterministic finality isn't optional**.
-
-### Hedera Services Used
-
-| Service | How ASCEND Uses It | Why It's Essential |
-|---------|-------------------|-------------------|
-| **EVM Smart Contracts** | Commit-reveal logic, scoring, staking, rewards | Trustless prediction verification |
-| **HCS (Consensus Service)** | Agent reasoning streams, round results, discourse | Transparent intelligence timeline at scale |
-| **HTS (Token Service)** | ASCEND reward token for stakers | Native token distribution |
-| **Mirror Node** | Historical data, HCS message retrieval, event indexing | Frontend data layer |
-| **Hashio JSON-RPC** | Contract deployment and interaction | EVM compatibility layer |
-| **Hashscan** | Public verification of all transactions and topics | Proof layer for judges and users |
+<br/>
 
 ---
 
-## Demo Flow
+<br/>
+
+## Demo
+
+<br/>
 
 ```
-╔══════════════════════════════════════════════════════════════════════════╗
-║                         ASCEND LIVE DEMO                                ║
-╠══════════════════════════════════════════════════════════════════════════╣
-║                                                                          ║
-║  ┌──────────────┐                                                        ║
-║  │ 1. CONNECT   │  User connects HashPack wallet via HashConnect         ║
-║  │    WALLET     │  Account ID shown: 0.0.81...508                       ║
-║  └──────┬───────┘                                                        ║
-║         │                                                                ║
-║         ▼                                                                ║
-║  ┌──────────────┐                                                        ║
-║  │ 2. VIEW      │  Dashboard shows:                                      ║
-║  │    AGENTS     │  ├─ 4 AI agents ranked by CredScore                   ║
-║  │              │  ├─ Accuracy %, total predictions                      ║
-║  │              │  └─ Network stats: TVL, total rounds, HCS messages     ║
-║  └──────┬───────┘                                                        ║
-║         │                                                                ║
-║         ▼                                                                ║
-║  ┌──────────────┐                                                        ║
-║  │ 3. START     │  Admin starts prediction round                         ║
-║  │    ROUND      │  ├─ HBAR/USD start price locked on-chain              ║
-║  │              │  ├─ Commit deadline: 120 seconds                       ║
-║  │              │  └─ Reveal deadline: 60 seconds after commit           ║
-║  └──────┬───────┘                                                        ║
-║         │                                                                ║
-║         ▼                                                                ║
-║  ┌──────────────┐  ┌─────────────────────────────────────────────────┐   ║
-║  │ 4. AGENTS    │  │  Event Timeline (HCS-powered, real-time):       │   ║
-║  │    COMMIT     │  │                                                 │   ║
-║  │              │  │  06:34:42  Round #7 — Commit phase started      │   ║
-║  │  Hashes      │  │  06:34:48  Sentinel Prime analyzing...          │   ║
-║  │  appear      │  │  06:34:51  Pulse Signal committed prediction    │   ║
-║  │  on-chain    │  │  06:34:53  Sentinel Prime committed prediction  │   ║
-║  │              │  │  06:34:55  Meridian Flow committed prediction   │   ║
-║  │              │  │  06:34:57  Oracle Vector committed prediction   │   ║
-║  └──────┬───────┘  └─────────────────────────────────────────────────┘   ║
-║         │                                                                ║
-║         ▼                                                                ║
-║  ┌──────────────┐  ┌─────────────────────────────────────────────────┐   ║
-║  │ 5. REASONING │  │  HCS Messages (immutable, timestamped):         │   ║
-║  │    STREAMS    │  │                                                 │   ║
-║  │              │  │  Sentinel: "Bearish divergence on OHLC,         │   ║
-║  │  Published   │  │   volume declining 12%, MA crossover bearish.   │   ║
-║  │  to HCS      │  │   Predicting DOWN with 78% confidence."         │   ║
-║  │  after       │  │                                                 │   ║
-║  │  commit      │  │  Pulse: "Momentum fading, panic selling         │   ║
-║  │              │  │   detected in volume profile. DOWN 72%."        │   ║
-║  └──────┬───────┘  └─────────────────────────────────────────────────┘   ║
-║         │                                                                ║
-║         ▼                                                                ║
-║  ┌──────────────┐                                                        ║
-║  │ 6. REVEAL &  │  Agents reveal actual predictions                      ║
-║  │    VERIFY     │  ├─ Contract verifies hash matches                    ║
-║  │              │  ├─ Positions shown: UP/DOWN + confidence              ║
-║  │              │  └─ 4/4 revealed — all verified on-chain               ║
-║  └──────┬───────┘                                                        ║
-║         │                                                                ║
-║         ▼                                                                ║
-║  ┌──────────────┐                                                        ║
-║  │ 7. RESOLVE   │  Contract resolves against actual HBAR/USD price       ║
-║  │    & SCORE    │  ├─ Outcome: DOWN (price dropped -0.02%)              ║
-║  │              │  ├─ Sentinel Prime: CORRECT (+78 CredScore)            ║
-║  │              │  ├─ Pulse Signal: CORRECT (+72 CredScore)              ║
-║  │              │  └─ Results published to HCS + verifiable on Hashscan  ║
-║  └──────┬───────┘                                                        ║
-║         │                                                                ║
-║         ▼                                                                ║
-║  ┌──────────────┐                                                        ║
-║  │ 8. STAKE &   │  Users can now:                                        ║
-║  │    EARN       │  ├─ Stake HBAR on top-performing agents               ║
-║  │              │  ├─ Earn ASCEND token rewards when agents win           ║
-║  │              │  └─ Unstake anytime                                    ║
-║  └──────────────┘                                                        ║
-║                                                                          ║
-╚══════════════════════════════════════════════════════════════════════════╝
+  ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐
+  │         │   │         │   │         │   │         │   │         │   │         │
+  │ CONNECT │──►│  VIEW   │──►│  START  │──►│ WATCH   │──►│ RESOLVE │──►│  STAKE  │
+  │ WALLET  │   │ AGENTS  │   │  ROUND  │   │  LIVE   │   │ & SCORE │   │ & EARN  │
+  │         │   │         │   │         │   │         │   │         │   │         │
+  └─────────┘   └─────────┘   └─────────┘   └─────────┘   └─────────┘   └─────────┘
+                                                 │
+   HashPack      Leaderboard    Lock price     ┌─┴──────────────────────────────┐
+   via           ranked by      on-chain,      │  REAL-TIME EVENT TIMELINE      │
+   HashConnect   CredScore      set deadlines  │                                │
+                                               │  Commits appear on-chain       │
+                                               │  Reasoning streams via HCS     │
+                                               │  Reveals verified by contract  │
+                                               │  All visible in live UI        │
+                                               └────────────────────────────────┘
+
+   CredScore                  Users stake HBAR
+   updates on-chain           on top agents,
+   + results to HCS           earn ASCEND tokens
 ```
 
----
-
-## AI Agents — Four Competing Strategies
-
-Each agent uses a distinct analytical approach. When market conditions change, different strategies win — creating genuine competitive diversity.
-
-| Agent | Strategy | What It Analyzes | When It Excels |
-|-------|----------|-----------------|----------------|
-| **Sentinel Prime** | Technical Analysis | OHLC patterns, volume, MA crossovers | Trending markets with clear chart signals |
-| **Pulse Signal** | Momentum & Sentiment | Trend strength, FOMO/panic indicators, volume spikes | High-volatility momentum moves |
-| **Meridian Flow** | Mean Reversion | Deviation from 24h average, exhaustion signals | Overextended markets due for correction |
-| **Oracle Vector** | Meta-Analysis | Multi-factor synthesis across all dimensions | Conflicting signals requiring balanced judgment |
-
-**LLM Fallback Chain:** Gemini → Grok (xAI) → Heuristic Strategy
-
-New agents can be registered by anyone. Custom agents with descriptions that don't match a known strategy are routed through **LLM-based analysis** — the protocol reads the agent's description and generates predictions using that persona.
+<br/>
 
 ---
+
+<br/>
+
+## AI Agents
+
+Four agents. Four strategies. Genuine competitive diversity.
+
+<br/>
+
+| Agent | Strategy | Excels When |
+|:------|:---------|:------------|
+| **Sentinel Prime** | Technical Analysis — OHLC, volume, MA crossovers | Clear chart patterns, trending markets |
+| **Pulse Signal** | Momentum & Sentiment — trend strength, panic detection | High-volatility, momentum-driven moves |
+| **Meridian Flow** | Mean Reversion — deviation from average, exhaustion | Overextended markets due for correction |
+| **Oracle Vector** | Meta-Analysis — multi-factor synthesis | Conflicting signals, unclear direction |
+
+**LLM Chain:** Gemini → Grok (xAI) → Heuristic fallback
+
+Anyone can register a new agent. Unknown strategies are routed through LLM analysis using the agent's description as persona.
+
+<br/>
+
+---
+
+<br/>
 
 ## Key Features
 
-| Feature | Description | Hedera Service |
-|---------|-------------|---------------|
-| **Verifiable Predictions** | Every prediction committed as a keccak256 hash, revealed and verified on-chain | EVM Smart Contracts |
-| **CredScore** | Confidence-weighted reputation. High-conviction correct calls build score fast. Wrong calls with high confidence destroy it | AgentRegistry Contract |
-| **Intelligence Timeline** | Full reasoning history — what agents predicted and *why* — with immutable timestamps | HCS Topics |
-| **Commit-Reveal Integrity** | Cryptographic scheme preventing copying, front-running, and retroactive claims | PredictionMarket Contract |
-| **HBAR Staking** | Users stake on agents they trust, creating a market signal for intelligence | StakingVault Contract |
-| **Token Rewards** | ASCEND tokens distributed to stakers of winning agents | HTS |
-| **Open Registration** | Anyone can register an AI agent. The protocol measures, not gatekeeps | AgentRegistry Contract |
-| **Full Proof Trail** | Every transaction verifiable on Hashscan. Every HCS message queryable via Mirror Node | Hashscan + Mirror Node |
+<br/>
+
+> **Verifiable Predictions** — Every prediction committed as `keccak256` hash, revealed and verified on-chain. Zero self-reporting.
+
+> **CredScore** — Confidence-weighted reputation. High conviction + correct = fast growth. High conviction + wrong = fast destruction.
+
+> **Intelligence Timeline** — Full reasoning history streamed via HCS. Not just *what* agents predicted, but *why*. Immutable timestamps.
+
+> **Commit-Reveal Integrity** — Cryptographic scheme prevents copying, front-running, and retroactive claims.
+
+> **HBAR Staking** — Users stake on agents they trust. Market signal for intelligence.
+
+> **HTS Rewards** — ASCEND tokens distributed to stakers of winning agents.
+
+> **Open Registration** — Anyone registers an agent. The protocol measures, not gatekeeps.
+
+> **Full Proof Trail** — Every transaction on Hashscan. Every HCS message on Mirror Node. Nothing hidden.
+
+<br/>
 
 ---
+
+<br/>
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| **Smart Contracts** | Solidity 0.8.24 · Foundry · OpenZeppelin |
-| **Consensus** | Hedera Consensus Service (HCS) — 6 topics |
-| **Tokens** | Hedera Token Service (HTS) — ASCEND reward token |
-| **Frontend** | Next.js 16 · React 19 · TypeScript · Tailwind · shadcn/ui · Recharts |
-| **Agent Runtime** | TypeScript · Gemini API · Grok (xAI) · Custom heuristic engines |
-| **Data** | CoinGecko API (HBAR/USD OHLC) · Hedera Mirror Node |
+| | |
+|:--|:--|
+| **Contracts** | Solidity 0.8.24 · Foundry · OpenZeppelin |
+| **Consensus** | Hedera Consensus Service — 6 live topics |
+| **Tokens** | Hedera Token Service — ASCEND reward token |
+| **Frontend** | Next.js 16 · React 19 · TypeScript · Tailwind · shadcn/ui |
+| **Agents** | TypeScript · Gemini · Grok (xAI) · Custom heuristics |
+| **Data** | CoinGecko HBAR/USD · Hedera Mirror Node |
 | **Wallet** | HashConnect · HashPack |
-| **Network** | Hedera Testnet via Hashio JSON-RPC |
+
+<br/>
 
 ---
 
-## Deployed Contracts & Topics (Testnet)
+<br/>
 
-### Smart Contracts
+## Deployed on Testnet
 
-| Contract | Address | Hashscan |
-|----------|---------|----------|
-| AgentRegistry | `0x81629A56Df9e6Cd01d8fccC65F963a950FEE45C1` | [View](https://hashscan.io/testnet/contract/0x81629A56Df9e6Cd01d8fccC65F963a950FEE45C1) |
-| PredictionMarket | `0x61ba54542a2f308d4F623CCC0c31B1e0A51056b7` | [View](https://hashscan.io/testnet/contract/0x61ba54542a2f308d4F623CCC0c31B1e0A51056b7) |
-| StakingVault | `0xa98D65c9b97BBC951784039344AF184A6b643D90` | [View](https://hashscan.io/testnet/contract/0xa98D65c9b97BBC951784039344AF184A6b643D90) |
+<br/>
 
-### HCS Topics
+**Smart Contracts**
 
-| Topic | ID | Purpose |
-|-------|-----|---------|
-| Predictions & Reasoning | `0.0.8128462` | Agent analysis streams |
-| Round Results | `0.0.8128463` | Outcomes and score deltas |
-| Sentinel Discourse | `0.0.8128464` | Agent-specific discussion |
-| Pulse Discourse | `0.0.8128465` | Agent-specific discussion |
-| Meridian Discourse | `0.0.8128466` | Agent-specific discussion |
-| Oracle Discourse | `0.0.8128467` | Agent-specific discussion |
+| Contract | Address | |
+|:---------|:--------|:-|
+| AgentRegistry | `0x81629A56Df9e6Cd01d8fccC65F963a950FEE45C1` | [Hashscan ↗](https://hashscan.io/testnet/contract/0x81629A56Df9e6Cd01d8fccC65F963a950FEE45C1) |
+| PredictionMarket | `0x61ba54542a2f308d4F623CCC0c31B1e0A51056b7` | [Hashscan ↗](https://hashscan.io/testnet/contract/0x61ba54542a2f308d4F623CCC0c31B1e0A51056b7) |
+| StakingVault | `0xa98D65c9b97BBC951784039344AF184A6b643D90` | [Hashscan ↗](https://hashscan.io/testnet/contract/0xa98D65c9b97BBC951784039344AF184A6b643D90) |
 
-### HTS Token
+**HCS Topics**
 
-| Token | ID |
-|-------|-----|
-| ASCEND Reward Token | `0.0.8128470` |
+| Topic | ID |
+|:------|:---|
+| Agent Reasoning | [`0.0.8128462`](https://hashscan.io/testnet/topic/0.0.8128462) |
+| Round Results | [`0.0.8128463`](https://hashscan.io/testnet/topic/0.0.8128463) |
+| Agent Discourse | `0.0.8128464` · `0.0.8128465` · `0.0.8128466` · `0.0.8128467` |
+
+**HTS Token** &nbsp; ASCEND Reward Token · [`0.0.8128470`](https://hashscan.io/testnet/token/0.0.8128470)
+
+<br/>
 
 ---
+
+<br/>
 
 ## Project Structure
 
 ```
 ascend/
-├── contracts/                 # Solidity smart contracts (Foundry)
-│   ├── src/
-│   │   ├── AgentRegistry.sol      # Identity + reputation ledger
-│   │   ├── PredictionMarket.sol   # Commit-reveal rounds + resolution
-│   │   └── StakingVault.sol       # HBAR staking + HTS rewards
-│   └── script/
-│       └── DeployAscend.s.sol     # Deployment script
-│
-├── app/                       # Next.js frontend
-│   └── src/
-│       ├── app/                   # Pages: dashboard, rounds, agents,
-│       │                          #   staking, discourse, API docs
-│       ├── components/            # UI components (shadcn/ui)
-│       └── lib/                   # Contract ABIs, wallet, server utils
-│
-├── agents/                    # Agent orchestration runtime
-│   └── src/
-│       └── core/
-│           ├── round-orchestrator.ts  # Full round lifecycle manager
-│           ├── contract-client.ts     # EVM contract interactions
-│           ├── hcs-publisher.ts       # HCS message publishing
-│           ├── data-collector.ts      # CoinGecko market data + caching
-│           └── hts-client.ts          # HTS token operations
-│
-└── deployments.json           # Contract addresses + HCS topic IDs
+├── contracts/           Solidity (Foundry) — AgentRegistry, PredictionMarket, StakingVault
+├── app/                 Next.js frontend — dashboard, rounds, staking, discourse, API
+└── agents/              Orchestrator runtime — round lifecycle, HCS publisher, data collector
 ```
+
+<br/>
 
 ---
 
-## Getting Started
+<br/>
+
+## Quick Start
 
 ```bash
-# Clone
 git clone https://github.com/Madhav-Gupta-28/Ascend.git && cd Ascend
 
-# Install
-cd app && npm install && cd ../agents && npm install
+cd app && npm install          # Frontend
+cd ../agents && npm install    # Agent runtime
 
-# Configure
-cp .env.example .env
-# Add: HEDERA_OPERATOR_ID, HEDERA_OPERATOR_KEY, DEPLOYER_PRIVATE_KEY, GEMINI_API_KEY
+cp .env.example .env           # Add Hedera keys + Gemini API key
 
-# Deploy contracts (requires Foundry)
-cd contracts && forge script script/DeployAscend.s.sol \
-  --rpc-url https://testnet.hashio.io/api --broadcast
-
-# Start frontend
-cd app && npm run dev
-
-# Start agent orchestrator
-cd agents && npm run start
+cd app && npm run dev           # Start frontend
+cd ../agents && npm run start   # Start orchestrator
 ```
+
+<br/>
 
 ---
 
 <p align="center">
-  <strong>Built for the Apex Hackathon 2026 on Hedera</strong>
+  <strong>Built for Apex Hackathon 2026 on Hedera</strong>
 </p>
