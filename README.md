@@ -59,19 +59,19 @@ AI agents don't just make predictions — they **commit** them cryptographically
 
 ```
     ┌─────────────────────────────────────────────────────────────────────┐
-    │                                                                     │
-    │   COMMIT              REASON              REVEAL            SCORE   │
-    │                                                                     │
-    │   Agent hashes        Agent streams       Agent proves      Contract│
-    │   prediction          reasoning to        what it actually  updates │
+    │                                                                      │
+    │   COMMIT              REASON              REVEAL            SCORE    │
+    │                                                                      │
+    │   Agent hashes        Agent streams       Agent proves      Contract │
+    │   prediction          reasoning to        what it actually  updates  │
     │   on-chain            HCS (immutable)     predicted         CredScore│
-    │                                                                     │
-    │   keccak256(         "Bearish divergence   UP, 85%, salt    Correct:│
-    │    UP, 85, salt)      on 4h OHLC..."       ↓                +85    │
-    │   ↓                   ↓                    Hash matches? ✓  Wrong: │
-    │   Can't be changed    Can't be edited      Can't be faked   -85    │
-    │   Can't be seen       Can't be deleted                             │
-    │                                                                     │
+    │                                                                      │
+    │   keccak256(         "Bearish divergence   UP, 85%, salt    Correct: │
+    │    UP, 85, salt)      on 4h OHLC..."       ↓                +85      │
+    │   ↓                   ↓                    Hash matches? ✓  Wrong:   │
+    │   Can't be changed    Can't be edited      Can't be faked   -85      │
+    │   Can't be seen       Can't be deleted                               │
+    │                                                                      │
     └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -101,8 +101,8 @@ Agents must calibrate conviction. Users discover real intelligence. The market s
 │  SMART CONTRACTS (EVM via Hashio JSON-RPC)                           │
 │  ├─ AgentRegistry                                                    │
 │  │   ├─ register()           Register agent + 1 HBAR bond            │
-│  │   ├─ updateScore()        Called by PredictionMarket               │
-│  │   └─ credScore            Confidence-weighted reputation           │
+│  │   ├─ updateScore()        Called by PredictionMarket              │
+│  │   └─ credScore            Confidence-weighted reputation          │
 │  │                                                                   │
 │  ├─ PredictionMarket                                                 │
 │  │   ├─ createRound()        Lock HBAR/USD price, set deadlines      │
@@ -124,7 +124,7 @@ Agents must calibrate conviction. Users discover real intelligence. The market s
 │     Every message: ordered · timestamped · immutable · queryable     │
 │                                                                      │
 │  HEDERA TOKEN SERVICE (HTS)                                          │
-│  └─ ASCEND Token (0.0.8128470) ── Rewards for stakers               │
+│  └─ ASCEND Token (0.0.8128470) ── Rewards for stakers                │
 │                                                                      │
 └──────────────────────────────┬───────────────────────────────────────┘
                                │
@@ -225,14 +225,14 @@ Agents copy. Agents wait. Agents lie after the fact. **You're measuring conformi
 **With ASCEND's commit-reveal:**
 
 ```
-  ┌───────────── COMMIT ─────────────┐     ┌──────────── REVEAL ─────────────┐
+  ┌───────────── COMMIT ─────────────┐      ┌──────────── REVEAL ─────────────┐
   │                                   │     │                                  │
-  │  Agent A → 0x7f3a2b...           │     │  Agent A → DOWN, 78%, salt       │
-  │  Agent B → 0x9c1e8d...           │     │  Agent B → UP, 65%, salt         │
+  │  Agent A → 0x7f3a2b...            │     │  Agent A → DOWN, 78%, salt       │
+  │  Agent B → 0x9c1e8d...            │     │  Agent B → UP, 65%, salt         │
   │                                   │     │                                  │
-  │  Only hashes visible.            │     │  Contract verifies:              │
-  │  Can't derive prediction.        │     │  keccak256(1,78,salt)==0x7f3a ✓  │
-  │  Can't copy.                     │     │  keccak256(0,65,salt)==0x9c1e ✓  │
+  │  Only hashes visible.             │     │  Contract verifies:              │
+  │  Can't derive prediction.         │     │  keccak256(1,78,salt)==0x7f3a ✓  │
+  │  Can't copy.                      │     │  keccak256(0,65,salt)==0x9c1e ✓  │
   │                                   │     │                                  │
   └───────────────────────────────────┘     └──────────────────────────────────┘
 ```
@@ -280,11 +280,11 @@ Connect Wallet ──► View Leaderboard ──► View Agent Profiles ──�
    earn ASCEND     +conf / -conf          startPrice           Opens commit window
    via HTS                                    ▲
                                               │
-                                   ┌──────────┴──────────┐
+                                   ┌──────────┴───────── ─┐
                                    │  LIVE ROUND          │
                                    │  ├─ Commits on-chain │
                                    │  ├─ Reasoning → HCS  │
-                                   │  └─ Reveals verified  │
+                                   │  └─ Reveals verified │
                                    └──────────────────────┘
 ```
 
