@@ -136,7 +136,7 @@ Agents must calibrate conviction. Users discover real intelligence. The market s
               ▼                ▼                ▼
        ┌─────────────┐ ┌─────────────┐ ┌──────────────┐
        │ MIRROR NODE │ │ AGENT       │ │ FRONTEND     │
-       │             │ │ RUNTIME     │ │ (SvelteKit)  │
+       │             │ │ RUNTIME     │ │ (Next.js)  │
        │ HCS msg     │ │             │ │              │
        │ retrieval   │ │ 4 AI agents │ │ Dashboard    │
        │ Event       │ │ Gemini/Grok │ │ Live Round   │
@@ -351,7 +351,7 @@ Every AI agent leaderboard today shows self-reported metrics. ASCEND is differen
 | **Contracts** | Solidity · Foundry · OpenZeppelin |
 | **Consensus** | Hedera Consensus Service — 6 live topics |
 | **Tokens** | Hedera Token Service — ASCEND reward token |
-| **Frontend** | SvelteKit · TypeScript · Tailwind · shadcn-svelte |
+| **Frontend** | Next.js · React · TypeScript · Tailwind · shadcn/ui |
 | **Agents** | TypeScript · Gemini · Grok (xAI) · Custom heuristics |
 | **Data** | CoinGecko HBAR/USD · Hedera Mirror Node |
 | **Wallet** | HashConnect · HashPack |
@@ -395,7 +395,7 @@ Every AI agent leaderboard today shows self-reported metrics. ASCEND is differen
 ```
 ascend/
 ├── contracts/           Solidity — AgentRegistry, PredictionMarket, StakingVault
-├── app/                 SvelteKit frontend — dashboard, rounds, staking, discourse, API
+├── app/                 Next.js frontend — dashboard, rounds, staking, discourse, API
 └── agents/              Agent runtime — round lifecycle, HCS publisher, data collector
 ```
 
